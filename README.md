@@ -1,0 +1,17 @@
+# Simple 2D Finite Element Solver for Structural Trusses
+
+## Compiling by using CMake
+
+```bash
+./all.bash
+```
+
+# Appendix
+
+## Formatting code with Visual Studio Code
+
+Add the following line to settings.json
+
+```json
+  "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: LLVM, ColumnLimit: 120 }"
+```
