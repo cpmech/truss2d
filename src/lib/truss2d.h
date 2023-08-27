@@ -7,133 +7,149 @@
 #define INT int
 #endif // _MSC_VER
 
+#include <Eigen/Dense>
 #include <cmath> // for pow, sqrt, etc
 #include <memory>
 
-// Implements a Finite Element solver for trusses in 2D
-//
-// Example of input:
-//                             1.0 ^
-//                                 |
-//                                 |3
-//                                 o----> 2.0
-//                               ,'|
-//                             ,'  |
-//                           ,'    |
-//                 EA/L=20 ,'      |
-//                   (3) ,'        | EA/L=5
-//                     ,'          | (2)
-//                   ,'            |
-//                 ,'              |
-//   y           ,'                |
-//   |        1,'        (1)       |2
-//   |        o--------------------o
-//   |____x   ^       EA/L=10      ^
-//           ###                   O
-//           ###                  ---
-//
-// const int nn = 3; // num nodes
-// const int nr = 3; // num rods
-// double nodes     [nn*2] = {0,0, 10,0, 10,10};
-// int    con       [nr*2] = {0,1, 1,2, 2,0};
-// double props     [nr  ] = {10,5,20};
-// bool   ep        [nn*2] = {true,true, false,true, false,false};
-// double ebc       [nn*2] = {0,-0.5, 0,0.4, 0,0};
-// double nbc       [nn*2] = {0,0, 0,0, 2,1};
-// double u_correct [nn*2] = {0,-0.5, 0,0.4, -0.5,0.2};
-// double f_correct [nn*2] = {-2,-2, 0,1, 2,1};
-//
-// Truss2D truss(nn,nr,nodes,con,ep,nbc,ebc,props);
-// truss.Solve();
-//
-// Notation:
-//   X,Y : coordinates
-//   R   : radii
-//   C   : list of connectivity (l:left node, r: right node)
-//   P   : properties
-//   ep  : is essential prescribed ?
-//   bc  : boundary conditions
-//   ebc : essential boundary conditions == displacements
-//   nbc : natural boundary conditions == forces
-
 /// @brief Implements a finite element solver for trusses in 2D
 struct Truss2D {
-    int _nn;              // Number of nodes
-    int _nr;              // Number of rods
-    double const *_nodes; // Coordinates x0 y0  x1 y1  ...  xnn ynn (size=2*nn)
-    int const *_con;      // Connectivity 0 1  0 2  1 2  (size=2*nr)
-    double const *_props; // Properties (size=nr)
-    bool const *_ep;      // Essential (displacement) prescribed?
-    double const *_ebc;   // Essential (displacement) boundary conditions
-    double const *_nbc;   // Natural (force) boundary conditions
-    bool _PbyL;           // Divide P (properties) by L (length) ?
-    double _Ke[16];       // Space to hold a stiffness matrix of an element. Set by Ke() method. (must be in col-major format for LAPACK)
-    INT _ndof;            // Number of degrees of freedom == 2*nn
-    double *_U;           // Global displacements (size=_ndof)
-    double *_F;           // Global forces (size=_ndof)
-    double *_Fint;        // Internal forces of an element (size=_ndof)
-    double *_Res;         // Residual = F - Fint (size=_ndof)
-    double *_dU;          // Global displacements increments (size=_ndof)
-    double *_dF;          // Global forces increments (size=_ndof)
-    double *_dFint;       // Internal forces increments of an element (size=_ndof)
-    double *_K;           // Global stiffness matrix. (must be in col-major forces for LAPACK). (size=_ndof*_ndof)
-    double *_Kcpy;        // Global stiffness matrix. (must be in col-major forces for LAPACK). (size=_ndof*_ndof)
-    INT *_ipiv;           // Index pivot for LAPACK (size=_ndof)
+    /// @brief Coordinates x0 y0  x1 y1  ...  xnn ynn (size=2*number_of_nodes)
+    Eigen::VectorXd coordinates;
 
-    // Initialize clears U, F, Fint and Res (displacements, forces, internal // forces, and residuals).
-    void Initialize();
+    /// @brief Connectivity 0 1  0 2  1 2  (size=2*number_of_elements)
+    Eigen::VectorXi connectivity;
 
-    // SetNRods (re)set number of rods (elements) (NOTE: this will only work if // Props==NULL).
-    void SetNRods(int NRods);
+    /// @brief Properties = E*A (size=number_of_elements)
+    Eigen::VectorXd properties;
 
-    // SetCon (re)set connectivity (NOTE: this will only work if Props==NULL).
-    void SetCon(int const *Con);
+    /// @brief Essential (displacement) prescribed?
+    std::vector<bool> essential_prescribed;
 
-    // Destructor
-    ~Truss2D();
+    /// @brief Essential (displacement) boundary conditions (size=TOTAL_NDOF)
+    Eigen::VectorXd essential_boundary_conditions;
 
-    // X returns the abscissa of node i
-    double X(int i) const { return _nodes[i * 2]; }
+    /// @brief Natural (force) boundary conditions (size=TOTAL_NDOF)
+    Eigen::VectorXd natural_boundary_conditions;
 
-    // Y returns the ordinate of node i
-    double Y(int i) const { return _nodes[i * 2 + 1]; }
+    /// @brief Divide E*A by each length?
+    bool divide_property_by_length;
 
-    // L returns the distance between node i and j
-    double L(int i, int j) const { return sqrt(pow(X(i) - X(j), 2.0) + pow(Y(i) - Y(j), 2.0)); }
+    /// @brief Element stiffness matrix (4 x 4)
+    Eigen::MatrixXd kk_element;
 
-    // Ndof returns the number of degrees of freedom
-    int Ndof() const { return _ndof; }
+    /// @brief Global displacements (size=TOTAL_NDOF)
+    Eigen::VectorXd uu;
 
-    // CalcKe calculate the element stiffness (Ke).
-    //   Input:
-    //     e -- index of an element
-    void CalcKe(int e);
+    /// @brief Global forces (size=TOTAL_NDOF)
+    Eigen::VectorXd ff;
 
-    // CalcK calculates the global stiffness (K).
-    void CalcK();
+    /// @brief Internal forces of an element (size=TOTAL_NDOF)
+    Eigen::VectorXd ff_int;
 
-    // ModifyK modifies K matrix for prescribed displacements.
-    //   Input:
-    //     h -- step-size
-    void ModifyK(double h = 1);
+    /// @brief Residual = F - F_int (size=TOTAL_NDOF)
+    Eigen::VectorXd residual;
 
-    // CalcDFint calculates internal forces.
-    void CalcDFint();
+    /// @brief Global displacements increments (size=TOTAL_NDOF)
+    Eigen::VectorXd delta_uu;
 
-    // Solve solves equilibrium via FEM.
-    //   Input:
-    //     nInc -- number of increments
-    void Solve(int nInc = 1);
+    /// @brief Global forces increments (size=TOTAL_NDOF)
+    Eigen::VectorXd delta_ff;
 
-    // U returns the displacements
-    double const *U() const { return _U; }
+    /// @brief Internal forces increments of an element (size=TOTAL_NDOF)
+    Eigen::VectorXd delta_ff_int;
 
-    // F returns the external forces
-    double const *F() const { return _F; }
+    /// @brief Global stiffness matrix (size=TOTAL_NDOF*TOTAL_NDOF)
+    Eigen::MatrixXd kk;
 
-    // Fint returns the internal forces
-    double const *Fint() const { return _Fint; }
+    /// @brief Global stiffness matrix (size=TOTAL_NDOF*TOTAL_NDOF)
+    Eigen::MatrixXd kk_copy;
 
-    // Res returns the residual
-    double const *Res() const { return _Res; }
+    /// @brief Allocates a new Truss2D structure
+    /// @param coordinates x0 y0  x1 y1  ...  xnn ynn (size=2*number_of_nodes)
+    /// @param connectivity 0 1  0 2  1 2  (size=2*number_of_elements)
+    /// @param properties E*A (size=number_of_elements)
+    /// @param essential_prescribed prescribed displacement flags
+    /// @param essential_boundary_conditions prescribed displacement values
+    /// @param natural_boundary_conditions prescribed external force values
+    /// @param divide_property_by_length divide E*A by each rod length
+    inline static std::unique_ptr<Truss2D> make_new(
+        Eigen::VectorXd coordinates,
+        Eigen::VectorXi connectivity,
+        Eigen::VectorXd properties,
+        std::vector<bool> essential_prescribed,
+        Eigen::VectorXd essential_boundary_conditions,
+        Eigen::VectorXd natural_boundary_conditions,
+        bool divide_property_by_length = true) {
+        size_t number_of_nodes = static_cast<size_t>(coordinates.size()) / 2;
+        size_t total_ndof = 2 * number_of_nodes;
+        return std::unique_ptr<Truss2D>{
+            new Truss2D{
+                coordinates,
+                connectivity,
+                properties,
+                essential_prescribed,
+                essential_boundary_conditions,
+                natural_boundary_conditions,
+                divide_property_by_length,
+                Eigen::MatrixXd(4, 4),                   // kk_element
+                Eigen::VectorXd(total_ndof),             // uu
+                Eigen::VectorXd(total_ndof),             // ff
+                Eigen::VectorXd(total_ndof),             // ff_int
+                Eigen::VectorXd(total_ndof),             // residual
+                Eigen::VectorXd(total_ndof),             // delta_uu
+                Eigen::VectorXd(total_ndof),             // delta_ff
+                Eigen::VectorXd(total_ndof),             // delta_ff_int
+                Eigen::MatrixXd(total_ndof, total_ndof), // kk
+                Eigen::MatrixXd(total_ndof, total_ndof), // kk_copy
+            }};
+    }
+
+    /// @brief Returns the abscissa of node i (zero based)
+    /// @param i index of node in 0 <= i < number_of_nodes
+    inline double get_x(size_t i) const {
+        if (i >= static_cast<size_t>(coordinates.size())) {
+            throw "cannot get x coordinate because the node index is out-of-range";
+        }
+        return coordinates[i * 2];
+    }
+
+    /// @brief Returns the ordinate of node i (zero based)
+    /// @param i index of node in 0 <= i < number_of_nodes
+    inline double get_y(size_t i) const {
+        if (i >= static_cast<size_t>(coordinates.size())) {
+            throw "cannot get y coordinate because the node index is out-of-range";
+        }
+        return coordinates[i * 2 + 1];
+    }
+
+    /// @brief Returns the distance between node i and j
+    /// @param i index of node in 0 <= i < number_of_nodes
+    /// @param j index of node in 0 <= j < number_of_nodes
+    inline double calculate_length(size_t i, size_t j) const {
+        if (i >= static_cast<size_t>(coordinates.size())) {
+            throw "cannot calculate the length because the i-th node index is out-of-range";
+        }
+        if (j >= static_cast<size_t>(coordinates.size())) {
+            throw "cannot calculate the length because the j-th node index is out-of-range";
+        }
+        return sqrt(pow(get_x(i) - get_x(j), 2.0) + pow(get_y(i) - get_y(j), 2.0));
+    }
+
+    /// @brief Calculates the element stiffness
+    /// @param e index of element (rod) in 0 <= e < number_of_elements
+    void calculate_kk_element(size_t e);
+
+    /// @brief Calculates the global stiffness
+    void calculate_kk();
+
+    /// @brief K matrix for prescribed displacements
+    /// @param h is the step-size
+    void modify_kk(double h = 1);
+
+    /// @brief CalcDFint calculates internal forces.
+    void calculate_delta_ff_int();
+
+    /// @brief Solve solves equilibrium via FEM.
+    /// @param number_of_increments number of increments
+    void solve(size_t number_of_increments = 1);
 };

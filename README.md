@@ -1,14 +1,16 @@
 # Simple 2D Finite Element Solver for Structural Trusses
 
-## Compiling by using CMake
-
 ```bash
 ./all.bash
 ```
 
-# Appendix
+## Install Eigen
 
-## Formatting code with Visual Studio Code
+```bash
+sudo ln -s ~/01-Code/cpp/eigen/Eigen /usr/local/include
+```
+
+## Format code with Visual Studio Code
 
 Add the following line to settings.json
 

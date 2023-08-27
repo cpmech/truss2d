@@ -10,191 +10,154 @@ void dgesv_(int *Np, int *NRHSp, double *A, int *LDAp, int *IPIVp, double *B, in
 #endif
 }
 
-/*
-Truss2D::Truss2D(int NNodes, int NRods, double const *Nodes, int const *Connects, bool const *EssenPresc,
-                 double const *NaturalBC, double const *EssenBC, double const *Props, bool DividePbyL) {
-    // set input data
-    _nn = NNodes;
-    _nr = NRods;
-    _nodes = Nodes;
-    _con = Connects;
-    _props = Props;
-    _ep = EssenPresc;
-    _ebc = EssenBC;
-    _nbc = NaturalBC;
-    _PbyL = DividePbyL;
+void Truss2D::calculate_kk_element(size_t e) {
+    size_t number_of_elements = static_cast<size_t>(connectivity.size()) / 2;
+    if (e >= number_of_elements) {
+        throw "cannot calculate element stiffness because the element index is out-of-range";
+    }
+    size_t i = connectivity(e * 2);
+    size_t j = connectivity(e * 2 + 1);
+    double d = calculate_length(i, j);
+    double c = (get_x(j) - get_x(i)) / d;
+    double s = (get_y(j) - get_y(i)) / d;
+    double p = (divide_property_by_length ? properties[e] / d : properties[e]);
 
-    // allocate arrays
-    _ndof = 2 * _nn;
-    _U = new double[_ndof];
-    _F = new double[_ndof];
-    _Fint = new double[_ndof];
-    _Res = new double[_ndof];
-    _dU = new double[_ndof];
-    _dF = new double[_ndof];
-    _dFint = new double[_ndof];
-    _K = new double[_ndof * _ndof];
-    _Kcpy = new double[_ndof * _ndof];
-    _ipiv = new INT[_ndof];
+    kk_element(0, 0) = p * c * c;
+    kk_element(0, 1) = p * c * s;
+    kk_element(0, 2) = -p * c * c;
+    kk_element(0, 3) = -p * c * s;
 
-    // initialize arrays
-    Initialize();
+    kk_element(1, 0) = kk_element(0, 1);
+    kk_element(1, 1) = p * s * s;
+    kk_element(1, 2) = kk_element(0, 3);
+    kk_element(1, 3) = -p * s * s;
+
+    kk_element(2, 0) = kk_element(0, 2);
+    kk_element(2, 1) = kk_element(0, 3);
+    kk_element(2, 2) = kk_element(0, 0);
+    kk_element(2, 3) = kk_element(0, 1);
+
+    kk_element(3, 0) = kk_element(0, 3);
+    kk_element(3, 1) = kk_element(1, 3);
+    kk_element(3, 2) = kk_element(0, 1);
+    kk_element(3, 3) = kk_element(1, 1);
 }
-*/
 
-void Truss2D::Initialize() {
-    for (int i = 0; i < _ndof; ++i) {
-        _U[i] = 0.0;
-        _F[i] = 0.0;
-        _Fint[i] = 0.0;
-        _Res[i] = 0.0;
+void Truss2D::calculate_kk() {
+    size_t number_of_nodes = static_cast<size_t>(coordinates.size()) / 2;
+    size_t total_ndof = 2 * number_of_nodes;
+    for (size_t i = 0; i < total_ndof; ++i) {
+        for (size_t j = 0; j < total_ndof; ++j) {
+            kk(i, j) = 0.0;
+        }
+    }
+    size_t number_of_elements = static_cast<size_t>(connectivity.size()) / 2;
+    for (size_t e = 0; e < number_of_elements; ++e) {
+        calculate_kk_element(e);
+        size_t l = connectivity(e * 2);                     // left node
+        size_t r = connectivity(e * 2 + 1);                 // right node
+        size_t m[4] = {l * 2, l * 2 + 1, r * 2, r * 2 + 1}; // map (local=>global)
+        for (size_t i = 0; i < 4; ++i) {
+            for (size_t j = 0; j < 4; ++j) {
+                kk(m[i], m[j]) += kk_element(i, j);
+            }
+        }
     }
 }
 
-void Truss2D::SetNRods(int NRods) { _nr = NRods; }
+void Truss2D::modify_kk(double h) {
+    size_t number_of_nodes = static_cast<size_t>(coordinates.size()) / 2;
+    size_t total_ndof = 2 * number_of_nodes;
 
-void Truss2D::SetCon(int const *Con) { _con = Con; }
-
-Truss2D::~Truss2D() {
-    delete[] _U;
-    delete[] _F;
-    delete[] _Fint;
-    delete[] _Res;
-    delete[] _dU;
-    delete[] _dF;
-    delete[] _dFint;
-    delete[] _K;
-    delete[] _Kcpy;
-    delete[] _ipiv;
-}
-
-void Truss2D::CalcKe(int e) {
-    int i = _con[e * 2];
-    int j = _con[e * 2 + 1];
-    double d = L(i, j);
-    double c = (X(j) - X(i)) / d;
-    double s = (Y(j) - Y(i)) / d;
-    double p = (_props == NULL ? 1.0 : (_PbyL ? _props[e] / d : _props[e]));
-    _Ke[0] = p * c * c;
-    _Ke[4] = p * c * s;
-    _Ke[8] = -p * c * c;
-    _Ke[12] = -p * c * s;
-    _Ke[1] = _Ke[4];
-    _Ke[5] = p * s * s;
-    _Ke[9] = _Ke[12];
-    _Ke[13] = -p * s * s;
-    _Ke[2] = _Ke[8];
-    _Ke[6] = _Ke[9];
-    _Ke[10] = _Ke[0];
-    _Ke[14] = _Ke[4];
-    _Ke[3] = _Ke[12];
-    _Ke[7] = _Ke[13];
-    _Ke[11] = _Ke[14];
-    _Ke[15] = _Ke[5];
-}
-
-void Truss2D::CalcK() {
-    for (int i = 0; i < _ndof * _ndof; ++i) {
-        _K[i] = 0.0;
-    }
-    for (int e = 0; e < _nr; ++e) {
-        CalcKe(e);
-        int l = _con[e * 2];                             // left node
-        int r = _con[e * 2 + 1];                         // right node
-        int m[4] = {l * 2, l * 2 + 1, r * 2, r * 2 + 1}; // map (local=>global)
-        for (int i = 0; i < 4; ++i)
-            for (int j = 0; j < 4; ++j)
-                _K[m[j] * _ndof + m[i]] += _Ke[j * 4 + i];
-    }
-}
-
-void Truss2D::ModifyK(double h) {
-    // Set dF and dU (workspace) vectors
-    for (int i = 0; i < _ndof; ++i) {
-        _dF[i] = 0.0;
-        _dU[i] = 0.0;
-        _dFint[i] = 0.0;
-    }
-    for (int i = 0; i < _ndof; ++i) {
-        if (_ep[i]) {
-            _dU[i] = (_ebc == NULL ? 0.0 : _ebc[i] * h);
+    // set prescribed values
+    for (size_t i = 0; i < total_ndof; ++i) {
+        delta_ff(i) = 0.0;
+        delta_uu(i) = 0.0;
+        delta_ff_int[i] = 0.0;
+        if (essential_prescribed[i]) {
+            delta_uu(i) = essential_boundary_conditions(i) * h;
         } else {
-            _dF[i] = _dU[i] = _nbc[i] * h;
-            for (int j = 0; j < _ndof; ++j) {
-                if (_ep[j]) {
-                    _dU[i] -= (_ebc == NULL ? 0.0 : _K[j * _ndof + i] * _ebc[j] * h);
+            delta_ff(i) = natural_boundary_conditions(i) * h;
+            delta_uu(i) = delta_ff[i];
+            for (size_t j = 0; j < total_ndof; ++j) {
+                if (essential_prescribed[j]) {
+                    delta_uu(i) -= kk(i, j) * essential_boundary_conditions(j) * h;
                 }
             }
         }
     }
 
-    // Clear lines and columns of K for prescribed displacements => modified
-    // stiffness
-    for (int i = 0; i < _ndof; ++i) {
-        if (_ep[i]) {
-            for (int j = 0; j < _ndof; ++j) {
-                _K[j * _ndof + i] = 0.0;
-                _K[i * _ndof + j] = 0.0;
+    // clear lines and columns of K for prescribed displacements => modified stiffness
+    for (size_t i = 0; i < total_ndof; ++i) {
+        if (essential_prescribed[i]) {
+            for (size_t j = 0; j < total_ndof; ++j) {
+                kk(i, j) = 0.0;
+                kk(j, i) = 0.0;
             }
-            _K[i * _ndof + i] = 1.0;
+            kk(i, i) = 1.0;
         }
     }
 }
 
-void Truss2D::CalcDFint() {
-    for (int e = 0; e < _nr; ++e) {
-        int i = _con[e * 2];
-        int j = _con[e * 2 + 1];
-        double d = L(i, j);
-        double c = (X(j) - X(i)) / d;
-        double s = (Y(j) - Y(i)) / d;
-        double p = (_props == NULL ? 1.0 : (_PbyL ? _props[e] / d : _props[e]));
-        double elong = c * _dU[j * 2] + s * _dU[j * 2 + 1] - (c * _dU[i * 2] + s * _dU[i * 2 + 1]); // elongation
-        double dfn = elong * p;                                                                     // normal force increment
-        _dFint[i * 2] += -c * dfn;
-        _dFint[i * 2 + 1] += -s * dfn;
-        _dFint[j * 2] += c * dfn;
-        _dFint[j * 2 + 1] += s * dfn; // global coordinates
+void Truss2D::calculate_delta_ff_int() {
+    size_t number_of_elements = static_cast<size_t>(connectivity.size()) / 2;
+    for (size_t e = 0; e < number_of_elements; ++e) {
+        size_t i = connectivity(e * 2);
+        size_t j = connectivity(e * 2 + 1);
+        double d = calculate_length(i, j);
+        double c = (get_x(j) - get_x(i)) / d;
+        double s = (get_y(j) - get_y(i)) / d;
+        double p = (divide_property_by_length ? properties[e] / d : properties[e]);
+        double delta_length = c * delta_uu[j * 2] + s * delta_uu[j * 2 + 1] - (c * delta_uu[i * 2] + s * delta_uu[i * 2 + 1]);
+        double delta_axial_force = delta_length * p;
+        delta_ff_int(i * 2) += -c * delta_axial_force;
+        delta_ff_int(i * 2 + 1) += -s * delta_axial_force;
+        delta_ff_int(j * 2) += c * delta_axial_force;
+        delta_ff_int(j * 2 + 1) += s * delta_axial_force;
     }
 }
 
-void Truss2D::Solve(int nInc) {
-    double h = 1.0 / nInc;
-    for (int i = 0; i < nInc; ++i) {
-        // Assembly
-        CalcK();
+void Truss2D::solve(size_t number_of_increments) {
+    size_t number_of_nodes = static_cast<size_t>(coordinates.size()) / 2;
+    size_t total_ndof = 2 * number_of_nodes;
+    double h = 1.0 / number_of_increments;
+    for (size_t i = 0; i < number_of_increments; ++i) {
+        // assembly
+        calculate_kk();
 
-        // Save a copy of K for later recovering of dF (could save only K21 and K22)
-        for (int j = 0; j < _ndof * _ndof; ++j) {
-            _Kcpy[j] = _K[j];
+        // save a copy of K for later recovering dF (could save only K21 and K22)
+        for (size_t j = 0; j < total_ndof; ++j) {
+            for (size_t i = 0; i < total_ndof; ++i) {
+                kk_copy(i, j) = kk(i, j);
+            }
         }
 
-        // Modify K for prescribed displacements
-        ModifyK(h);
+        // modify K for prescribed displacements
+        modify_kk(h);
 
-        // Solve dU = inv(K)*dF
-        INT info = 0;
-        INT nrhs = 1;
-        dgesv_(&_ndof, &nrhs, _K, &_ndof, _ipiv, _dU, &_ndof, &info);
+        // solve dU = inv(K)*dF
+        // INT info = 0;
+        // INT nrhs = 1;
+        // dgesv_(&_ndof, &nrhs, _K, &_ndof, _ipiv, _dU, &_ndof, &info);
 
-        // Solve external forces increments for prescribed essential (displacement) dofs
-        for (int j = 0; j < _ndof; ++j) {
-            if (_ep[j]) {
-                for (int m = 0; m < _ndof; ++m) {
-                    _dF[j] += _Kcpy[m * _ndof + j] * _dU[m];
+        // solve external forces increments for prescribed essential (displacement) dofs
+        for (size_t j = 0; j < total_ndof; ++j) {
+            if (essential_prescribed[j]) {
+                for (size_t m = 0; m < total_ndof; ++m) {
+                    delta_ff[j] += kk_copy(j, m) * delta_uu(m);
                 }
             }
         }
 
-        // Calc internal forces
-        CalcDFint();
+        // internal forces
+        calculate_delta_ff_int();
 
-        // Update
-        for (int j = 0; j < _ndof; ++j) {
-            _U[j] += _dU[j];
-            _F[j] += _dF[j];
-            _Fint[j] += _dFint[j];
-            _Res[j] = _F[j] - _Fint[j];
+        // update
+        for (size_t j = 0; j < total_ndof; ++j) {
+            uu(j) += delta_uu(j);
+            ff(j) += delta_ff(j);
+            ff_int(j) += delta_ff_int(j);
+            residual(j) = ff(j) - ff_int(j);
         }
     }
 }
