@@ -42,10 +42,10 @@ TEST_CASE("truss2d") {
     //
     // EXPECTED RESULTS
     //
-    // ux_ana = [0.0, 0.0, -0.5]
-    // uy_ana = [-0.5, 0.4, 0.2]
-    // fx_ana = [-2.0, 0.0, 2.0]
-    // fy_ana = [-2.0, 1.0, 1.0]
+    // kk * uu = ff
+    //
+    // uu_exp = [0.0, -0.5, 0.0, 0.4, -0.5, 0.2]
+    // ff_exp = [-2.0, -2.0, 0.0, 1.0, 2.0, 1.0]
 
     size_t number_of_nodes = 3;
     size_t number_of_elements = 3;
