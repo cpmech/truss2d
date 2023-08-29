@@ -33,10 +33,10 @@ from tlfem.util import CompareArrays
 #
 # EXPECTED RESULTS
 #
-# ux_ana = [0.0, 0.0, -0.5]
-# uy_ana = [-0.5, 0.4, 0.2]
-# fx_ana = [-2.0, 0.0, 2.0]
-# fy_ana = [-2.0, 1.0, 1.0]
+# kk * uu = ff
+#
+# uu_exp = [0.0, -0.5, 0.0, 0.4, -0.5, 0.2]
+# ff_exp = [-2.0, -2.0, 0.0, 1.0, 2.0, 1.0]
 
 # vertices
 V = [
@@ -73,16 +73,17 @@ vertex_bcs = {
 s.set_bcs(vb=vertex_bcs)
 
 # solve steady
-o = s.solve_steady(reactions=True)
+o = s.solve_steady(reactions=True, output_F=True)
 
 # output
 o.print_res("U")
 o.print_res("R", True)
 
 # check solution
-ux_num = [o.Uout["ux"][n][-1] for n in range(m.nv)]
-uy_num = [o.Uout["uy"][n][-1] for n in range(m.nv)]
-ux_ana = [0.0, 0.0, -0.5]
-uy_ana = [-0.5, 0.4, 0.2]
-CompareArrays(ux_num, ux_ana, tol=1e-15)
-CompareArrays(uy_num, uy_ana, tol=1e-15)
+uu = np.array(
+    [(o.Uout["ux"][n][-1], o.Uout["uy"][n][-1]) for n in range(m.nv)]
+).flatten()
+uu_exp = [0.0, -0.5, 0.0, 0.4, -0.5, 0.2]
+ff_exp = [-2.0, -2.0, 0.0, 1.0, 2.0, 1.0]
+CompareArrays(uu, uu_exp, tol=1e-15)
+CompareArrays(o.F, ff_exp, tol=1e-15)
