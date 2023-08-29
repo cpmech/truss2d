@@ -12,6 +12,41 @@ using namespace std;
 
 TEST_CASE("truss2d") {
 
+    // GEOMETRY
+    //
+    //                      fy=1 ↑
+    // ---                       2 →
+    //  ↑                      ,'| fx=2
+    //  |                    ,'  |
+    //  |                  ,'    |
+    //  |       EA=200√2 ,'      |
+    // 10          (2) ,'        | EA=50
+    //  |            ,'          | (1)
+    //  |          ,'            |
+    //  |        ,'              |
+    //  |      ,'    EA=100      |
+    //  ↓    ,'       (0)        |
+    // ---  0--------------------1
+    //     | |                  | |
+    //      ⇊ uy=-0.5     uy=0.4 ⇈
+    //
+    //      |←------- 10 -------→|
+    //
+    // BOUNDARY CONDITIONS
+    //
+    // node 0: x-fixed with a vertical
+    //         displacement: uy = -0.5
+    // node 1: x-fixed with a vertical
+    //         displacement: uy = 0.4
+    // node 2: fx = 2 and fy = 1
+    //
+    // EXPECTED RESULTS
+    //
+    // ux_ana = [0.0, 0.0, -0.5]
+    // uy_ana = [-0.5, 0.4, 0.2]
+    // fx_ana = [-2.0, 0.0, 2.0]
+    // fy_ana = [-2.0, 1.0, 1.0]
+
     size_t number_of_nodes = 3;
     size_t number_of_elements = 3;
 

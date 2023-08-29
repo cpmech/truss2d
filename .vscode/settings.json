@@ -1,6 +1,12 @@
 {
   "cmake.configureOnOpen": false,
   "cSpell.words": [
-    "SUBCASE"
-  ]
+    "EelasticRod",
+    "SUBCASE",
+    "tlfem",
+    "Uout"
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
 }
