@@ -81,16 +81,97 @@ TEST_CASE("truss2d") {
         CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 600.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -800.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), -600.0, 1e-15));
-
         CHECK(equal_scalars_tol(truss->kk_element->get(1, 0), 0.0, 1e-15)); // not 600, because of using upper triangle only
         CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 450.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), -600.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -450.0, 1e-15));
-
         CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 800.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 600.0, 1e-15));
-
         CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 450.0, 1e-15));
+
+        truss->calculate_element_stiffness(1);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 0.0, 1e-15));
+
+        truss->calculate_element_stiffness(2);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 2083.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -2083.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 2083.3333333333333, 1e-15));
+
+        truss->calculate_element_stiffness(3); // same as rod # 1
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 0.0, 1e-15));
+
+        truss->calculate_element_stiffness(4);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 450.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -450.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 450.0, 1e-15));
+
+        truss->calculate_element_stiffness(5); // same as rod # 0
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 450.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -450.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 800.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 450.0, 1e-15));
+
+        truss->calculate_element_stiffness(6); // same as rod # 1
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 1562.5, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 0.0, 1e-15));
+
+        truss->calculate_element_stiffness(7); // same as rod # 2
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 2083.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -2083.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 2083.3333333333333, 1e-15));
     }
 
     SUBCASE("three-member truss") {
