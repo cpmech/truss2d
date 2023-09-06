@@ -7,29 +7,29 @@
 #define INT int
 #endif // _MSC_VER
 
-#include <Eigen/Dense>
 #include <cmath> // for pow, sqrt, etc
 #include <memory>
+#include <vector>
 
 /// @brief Implements a finite element solver for trusses in 2D
 struct Truss2D {
     /// @brief Coordinates x0 y0  x1 y1  ...  xnn ynn (size=2*number_of_nodes)
-    Eigen::VectorXd coordinates;
+    std::vector<double> coordinates;
 
     /// @brief Connectivity 0 1  0 2  1 2  (size=2*number_of_elements)
-    Eigen::VectorXi connectivity;
+    std::vector<size_t> connectivity;
 
     /// @brief Properties = E*A (size=number_of_elements)
-    Eigen::VectorXd properties;
+    std::vector<double> properties;
 
     /// @brief Essential (displacement) prescribed?
     std::vector<bool> essential_prescribed;
 
     /// @brief Essential (displacement) boundary conditions (size=TOTAL_NDOF)
-    Eigen::VectorXd essential_boundary_conditions;
+    std::vector<double> essential_boundary_conditions;
 
     /// @brief Natural (force) boundary conditions (size=TOTAL_NDOF)
-    Eigen::VectorXd natural_boundary_conditions;
+    std::vector<double> natural_boundary_conditions;
 
     /// @brief Divide E*A by each length?
     bool divide_property_by_length;
@@ -38,25 +38,25 @@ struct Truss2D {
     Eigen::MatrixXd kk_element;
 
     /// @brief Global displacements (size=TOTAL_NDOF)
-    Eigen::VectorXd uu;
+    std::vector<double> uu;
 
     /// @brief Global forces (size=TOTAL_NDOF)
-    Eigen::VectorXd ff;
+    std::vector<double> ff;
 
     /// @brief Internal forces of an element (size=TOTAL_NDOF)
-    Eigen::VectorXd ff_int;
+    std::vector<double> ff_int;
 
     /// @brief Residual = F - F_int (size=TOTAL_NDOF)
-    Eigen::VectorXd residual;
+    std::vector<double> residual;
 
     /// @brief Global displacements increments (size=TOTAL_NDOF)
-    Eigen::VectorXd delta_uu;
+    std::vector<double> delta_uu;
 
     /// @brief Global forces increments (size=TOTAL_NDOF)
-    Eigen::VectorXd delta_ff;
+    std::vector<double> delta_ff;
 
     /// @brief Internal forces increments of an element (size=TOTAL_NDOF)
-    Eigen::VectorXd delta_ff_int;
+    std::vector<double> delta_ff_int;
 
     /// @brief Global stiffness matrix (size=TOTAL_NDOF*TOTAL_NDOF)
     Eigen::MatrixXd kk;
@@ -73,12 +73,12 @@ struct Truss2D {
     /// @param natural_boundary_conditions prescribed external force values
     /// @param divide_property_by_length divide E*A by each rod length
     inline static std::unique_ptr<Truss2D> make_new(
-        Eigen::VectorXd coordinates,
-        Eigen::VectorXi connectivity,
-        Eigen::VectorXd properties,
+        std::vector<double> coordinates,
+        std::vector<size_t> connectivity,
+        std::vector<double> properties,
         std::vector<bool> essential_prescribed,
-        Eigen::VectorXd essential_boundary_conditions,
-        Eigen::VectorXd natural_boundary_conditions,
+        std::vector<double> essential_boundary_conditions,
+        std::vector<double> natural_boundary_conditions,
         bool divide_property_by_length = true) {
         size_t number_of_nodes = static_cast<size_t>(coordinates.size()) / 2;
         size_t total_ndof = 2 * number_of_nodes;
@@ -92,13 +92,13 @@ struct Truss2D {
                 natural_boundary_conditions,
                 divide_property_by_length,
                 Eigen::MatrixXd(4, 4),                   // kk_element
-                Eigen::VectorXd(total_ndof),             // uu
-                Eigen::VectorXd(total_ndof),             // ff
-                Eigen::VectorXd(total_ndof),             // ff_int
-                Eigen::VectorXd(total_ndof),             // residual
-                Eigen::VectorXd(total_ndof),             // delta_uu
-                Eigen::VectorXd(total_ndof),             // delta_ff
-                Eigen::VectorXd(total_ndof),             // delta_ff_int
+                std::vector<double>(total_ndof),         // uu
+                std::vector<double>(total_ndof),         // ff
+                std::vector<double>(total_ndof),         // ff_int
+                std::vector<double>(total_ndof),         // residual
+                std::vector<double>(total_ndof),         // delta_uu
+                std::vector<double>(total_ndof),         // delta_ff
+                std::vector<double>(total_ndof),         // delta_ff_int
                 Eigen::MatrixXd(total_ndof, total_ndof), // kk
                 Eigen::MatrixXd(total_ndof, total_ndof), // kk_copy
             }};

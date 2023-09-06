@@ -56,9 +56,7 @@ endif(WIN32)
 
 set(LIB_NAME "libtruss2d")
 
-add_library(${LIB_NAME} SHARED
-    src/lib/truss2d.cpp
-)
+add_library(${LIB_NAME} STATIC src/lib/truss2d.cpp)
 
 target_link_libraries(${LIB_NAME} PUBLIC ${LIBS})
 
