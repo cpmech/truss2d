@@ -119,7 +119,7 @@ TEST_CASE("truss2d") {
         // check global stiffness matrix
         truss->calculate_global_stiffness();
         auto kk = truss->kk_coo->as_matrix();
-        kk->print();
+        // kk->print();
         CHECK(equal_scalars_tol(kk->get(0, 0), 20.0, 1e-14));
         CHECK(equal_scalars_tol(kk->get(0, 1), 10.0, 1e-14));
         CHECK(equal_scalars_tol(kk->get(0, 2), -10.0, 1e-14));
@@ -311,6 +311,29 @@ TEST_CASE("truss2d") {
 
         // check global stiffness matrix
         truss->calculate_global_stiffness();
+        auto kk = truss->kk_coo->as_matrix();
+        // kk->print();
         // truss->kk_csr->print("global stiffness matrix");
+        CHECK(equal_scalars_tol(kk->get(2, 2), 3925.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(2, 3), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(2, 4), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(2, 5), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(2, 8), -800.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(2, 9), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(3, 3), 2533.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(3, 4), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(3, 5), -2083.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(3, 8), -600.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(3, 9), -450.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(4, 4), 3162.50, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(4, 5), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(4, 8), -1562.50, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(4, 9), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(5, 5), 2983.3333333333333, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(5, 8), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(5, 9), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(8, 8), 2362.50, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(8, 9), 600.0, 1e-15));
+        CHECK(equal_scalars_tol(kk->get(9, 9), 2533.3333333333333, 1e-15));
     }
 }
