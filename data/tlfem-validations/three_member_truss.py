@@ -25,18 +25,16 @@ from tlfem.util import CompareArrays
 #
 # BOUNDARY CONDITIONS
 #
-# node 0: x-fixed with a vertical
-#         displacement: uy = -0.5
-# node 1: x-fixed with a vertical
-#         displacement: uy = 0.4
-# node 2: fx = 2 and fy = 1
+# node 0: x-fixed with a vertical displacement: uy = -0.5
+# node 1: x-fixed with a vertical displacement: uy = 0.4
+# node 2: fx = 2.0 and fy = 1.0
 #
 # EXPECTED RESULTS
 #
 # kk * uu = ff
 #
-# uu_exp = [0.0, -0.5, 0.0, 0.4, -0.5, 0.2]
-# ff_exp = [-2.0, -2.0, 0.0, 1.0, 2.0, 1.0]
+# correct_uu = [0.0, -0.5, 0.0, 0.4, -0.5, 0.2]
+# correct_ff = [-2.0, -2.0, 0.0, 1.0, 2.0, 1.0]
 
 # vertices
 V = [

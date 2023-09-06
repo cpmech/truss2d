@@ -1,11 +1,24 @@
 #pragma once
 
 #include "laclib.h"
+#include <map>
 #include <memory>
+#include <tuple>
 #include <vector>
 
+using namespace std;
+
+/// @brief Defines the index of a local DOF (0 or 1)
+enum LocalDOF {
+    AlongX = 0,
+    AlongY = 1,
+};
+
+/// @brief Holds the pair (node_number, dof_number)
+typedef std::tuple<size_t, LocalDOF> node_dof_pair_t;
+
 /// @brief Implements a finite element solver for trusses in 2D
-struct Truss2D {
+struct Truss2d {
     /// @brief Holds the number of nodes = coordinates.size() / 2
     size_t number_of_nodes;
 
@@ -24,7 +37,7 @@ struct Truss2D {
     /// @brief Properties = E*A (size = number_of_elements)
     std::vector<double> properties;
 
-    /// @brief Essential (displacement) prescribed?
+    /// @brief Essential (displacement) prescribed? (size = total_ndof)
     std::vector<bool> essential_prescribed;
 
     /// @brief Essential (displacement) boundary conditions (size = total_ndof)
@@ -32,9 +45,6 @@ struct Truss2D {
 
     /// @brief Natural (force) boundary conditions (size = total_ndof)
     std::vector<double> natural_boundary_conditions;
-
-    /// @brief Divide E*A by each length?
-    bool divide_property_by_length;
 
     /// @brief Element stiffness matrix (4 x 4)
     std::unique_ptr<Matrix> kk_element;
@@ -67,28 +77,41 @@ struct Truss2D {
     /// @param coordinates x0 y0  x1 y1  ...  xnn ynn (size = 2 * number_of_nodes)
     /// @param connectivity 0 1  0 2  1 2  (size = 2 * number_of_elements)
     /// @param properties E*A (size = number_of_elements)
-    /// @param essential_prescribed prescribed displacement flags
-    /// @param essential_boundary_conditions prescribed displacement values
-    /// @param natural_boundary_conditions prescribed external force values
-    /// @param divide_property_by_length divide E*A by each rod length
-    inline static std::unique_ptr<Truss2D> make_new(
-        std::vector<double> coordinates,
-        std::vector<size_t> connectivity,
-        std::vector<double> properties,
-        std::vector<bool> essential_prescribed,
-        std::vector<double> essential_boundary_conditions,
-        std::vector<double> natural_boundary_conditions,
-        bool divide_property_by_length = true) {
+    /// @param essential_bcs prescribed boundary conditions. maps (node_number,dof_number) => value
+    /// @param natural_bcs natural boundary conditions. maps (node_number,dof_number) => value
+    inline static std::unique_ptr<Truss2d> make_new(
+        const std::vector<double> &coordinates,
+        const std::vector<size_t> &connectivity,
+        const std::vector<double> &properties,
+        const std::map<node_dof_pair_t, double> &essential_bcs,
+        const std::map<node_dof_pair_t, double> &natural_bcs) {
 
         auto number_of_nodes = coordinates.size() / 2;
         auto number_of_elements = connectivity.size() / 2;
         auto total_ndof = 2 * number_of_nodes;
-        auto nnz_max = 16 * number_of_elements; // can be optimized
+        auto nnz_max = 16 * number_of_elements; // could be optimized by doing an assembly first
+
+        auto essential_prescribed = std::vector<bool>(total_ndof, false);
+        auto essential_boundary_conditions = std::vector<double>(total_ndof, 0.0);
+        auto natural_boundary_conditions = std::vector<double>(total_ndof, 0.0);
+
+        for (const auto &[key, value] : essential_bcs) {
+            const auto [node, dof] = key;
+            auto global_dof = node * 2 + dof;
+            essential_prescribed[global_dof] = true;
+            essential_boundary_conditions[global_dof] = value;
+        }
+
+        for (const auto &[key, value] : natural_bcs) {
+            const auto [node, dof] = key;
+            auto global_dof = node * 2 + dof;
+            natural_boundary_conditions[global_dof] = value;
+        }
 
         // StoredLayout layout = UPPER_TRIANGULAR;
         StoredLayout layout = FULL_MATRIX;
 
-        return std::unique_ptr<Truss2D>{new Truss2D{
+        return std::unique_ptr<Truss2d>{new Truss2d{
             number_of_nodes,
             number_of_elements,
             total_ndof,
@@ -98,7 +121,6 @@ struct Truss2D {
             essential_prescribed,
             essential_boundary_conditions,
             natural_boundary_conditions,
-            divide_property_by_length,
             Matrix::make_new(4, 4),                           // kk_element
             std::vector<double>(total_ndof),                  // uu
             std::vector<double>(total_ndof),                  // ff
@@ -111,27 +133,9 @@ struct Truss2D {
         }};
     }
 
-    /// @brief Returns the abscissa of node n (zero based)
-    /// @param i index of node in 0 <= n < number_of_nodes
-    inline double get_x(size_t n) const {
-        if (n >= coordinates.size()) {
-            throw "cannot get x coordinate because the node index is out-of-range";
-        }
-        return coordinates[n * 2];
-    }
-
-    /// @brief Returns the ordinate of node n (zero based)
-    /// @param i index of node in 0 <= n < number_of_nodes
-    inline double get_y(size_t n) const {
-        if (n >= coordinates.size()) {
-            throw "cannot get y coordinate because the node index is out-of-range";
-        }
-        return coordinates[n * 2 + 1];
-    }
-
     /// @brief Returns the distance between node a and b
-    /// @param i index of node in 0 <= a < number_of_nodes
-    /// @param j index of node in 0 <= b < number_of_nodes
+    /// @param a index of node in 0 <= a < number_of_nodes
+    /// @param b index of node in 0 <= b < number_of_nodes
     inline double calculate_length(size_t a, size_t b) const {
         if (a >= coordinates.size()) {
             throw "cannot calculate the length because the a-th node index is out-of-range";
@@ -150,7 +154,7 @@ struct Truss2D {
 
     /// @brief Calculates the element stiffness
     /// @param e index of element (rod) in 0 <= e < number_of_elements
-    void calculate_kk_element(size_t e);
+    void calculate_element_stiffness(size_t e);
 
     /// @brief Calculates the global stiffness
     void calculate_kk();
