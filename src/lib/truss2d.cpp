@@ -45,8 +45,13 @@ void Truss2d::calculate_global_stiffness(bool recalculate) {
         size_t b = connectivity[e * 2 + 1];
         size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map local => global
         for (size_t i = 0; i < 4; ++i) {
-            for (size_t j = i; j < 4; ++j) { // j = i => upper triangular
-                kk_coo->put(m[i], m[j], kk_element->get(i, j));
+            for (size_t j = i; j < 4; ++j) { // j = i => local upper triangle
+                if (m[j] >= m[i]) {
+                    kk_coo->put(m[i], m[j], kk_element->get(i, j));
+                } else {
+                    // must go to the global upper triangle
+                    kk_coo->put(m[j], m[i], kk_element->get(i, j));
+                }
             }
         }
     }

@@ -116,6 +116,32 @@ TEST_CASE("truss2d") {
         CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 10.0, 1e-14));
         CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 10.0, 1e-14));
 
+        // check global stiffness matrix
+        truss->calculate_global_stiffness();
+        auto kk = truss->kk_coo->as_matrix();
+        kk->print();
+        CHECK(equal_scalars_tol(kk->get(0, 0), 20.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(0, 1), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(0, 2), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(0, 3), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(0, 4), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(0, 5), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(1, 1), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(1, 2), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(1, 3), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(1, 4), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(1, 5), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(2, 2), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(2, 3), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(2, 4), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(2, 5), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(3, 3), 5.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(3, 4), 0.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(3, 5), -5.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(4, 4), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(4, 5), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(kk->get(5, 5), 15.0, 1e-14));
+
         // solve mechanical problem
 
         // check solution
