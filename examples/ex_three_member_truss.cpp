@@ -1,9 +1,6 @@
-// Copyright 2016 The Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+#include <iostream>
 
 #include "../src/libtruss2d.h"
-#include <iostream>
 
 using std::cout;
 using std::endl;
