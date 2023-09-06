@@ -37,20 +37,27 @@ void Truss2d::calculate_element_stiffness(size_t e) {
     kk_element->set(3, 3, p * s * s);
 }
 
-void Truss2d::calculate_kk() {
-    // kk->pos = 0; // reset
-    // for (size_t e = 0; e < number_of_elements; ++e) {
-    //     calculate_kk_element(e);
-    //     size_t a = connectivity[e * 2];
-    //     size_t b = connectivity[e * 2 + 1];
-    //     size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map (local=>global)
-    //     for (size_t i = 0; i < 4; ++i) {
-    //         for (size_t j = 0; j < 4; ++j) {
-    //             // TODO: upper triangle only
-    //             kk->put(m[i], m[j], kk_element->get(i, j));
-    //         }
-    //     }
-    // }
+void Truss2d::calculate_global_stiffness(bool recalculate) {
+    kk_coo->pos = 0; // reset
+    for (size_t e = 0; e < number_of_elements; ++e) {
+        calculate_element_stiffness(e);
+        size_t a = connectivity[e * 2];
+        size_t b = connectivity[e * 2 + 1];
+        size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map local => global
+        for (size_t i = 0; i < 4; ++i) {
+            for (size_t j = i; j < 4; ++j) { // j = i => upper triangular
+                kk_coo->put(m[i], m[j], kk_element->get(i, j));
+            }
+        }
+    }
+    if (kk_csr == NULL) {
+        kk_csr = CsrMatrixMkl::from(kk_coo);
+    } else {
+        if (recalculate) {
+            kk_csr.reset();
+            kk_csr = CsrMatrixMkl::from(kk_coo);
+        }
+    }
 }
 
 void Truss2d::modify_kk(double h) {

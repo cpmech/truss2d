@@ -13,6 +13,116 @@ using namespace std;
 #define SQRT_2 1.41421356237309504880168872420969807856967187537694807317667973799073247846210703885038753432764157
 
 TEST_CASE("truss2d") {
+    SUBCASE("three-member truss") {
+        // GEOMETRY
+        //
+        //                      fy=1 ↑
+        // ---                       2 →
+        //  ↑                      ,'| fx=2
+        //  |                    ,'  |
+        //  |                  ,'    |
+        //  |       EA=200√2 ,'      |
+        // 10          (2) ,'        | EA=50
+        //  |            ,'          | (1)
+        //  |          ,'            |
+        //  |        ,'              |
+        //  |      ,'    EA=100      |
+        //  ↓    ,'       (0)        |
+        // ---  0--------------------1
+        //     | |                  | |
+        //      ⇊ uy=-0.5     uy=0.4 ⇈
+        //
+        //      |←------- 10 -------→|
+        //
+        // BOUNDARY CONDITIONS
+        //
+        // node 0: x-fixed with a vertical displacement: uy = -0.5
+        // node 1: x-fixed with a vertical displacement: uy = 0.4
+        // node 2: fx = 2.0 and fy = 1.0
+        //
+        // EXPECTED RESULTS
+        //
+        // kk * uu = ff
+        //
+        // correct_uu = {0.0, -0.5, 0.0, 0.4, -0.5, 0.2}
+        // correct_ff = {-2.0, -2.0, 0.0, 1.0, 2.0, 1.0}
+        //
+        // Reference
+        // Carlos Felippa I-FEM Page 3-12 Chapter 3 The Direct Stiffness Method II
+
+        // input data
+        auto coordinates = vector<double>{0.0, 0.0, 10.0, 0.0, 10.0, 10.0};
+        auto connectivity = vector<size_t>{0, 1, 1, 2, 2, 0};
+        auto properties = vector<double>{100.0, 50.0, 200.0 * SQRT_2};
+        map<node_dof_pair_t, double> essential_bcs{
+            {{0, AlongX}, 0.0},
+            {{0, AlongY}, -0.5},
+            {{1, AlongY}, 0.4}};
+        map<node_dof_pair_t, double> natural_bcs{
+            {{2, AlongX}, 2.0},
+            {{2, AlongY}, 1.0},
+        };
+
+        // allocate truss solver
+        auto truss = Truss2d::make_new(coordinates, connectivity, properties, essential_bcs, natural_bcs);
+
+        // check boundary condition arrays
+        auto correct_ep = vector<bool>{true, true, false, true, false, false};
+        auto correct_ebc = vector<double>{0.0, -0.5, 0.0, 0.4, 0.0, 0.0};
+        auto correct_nbc = vector<double>{0.0, 0.0, 0.0, 0.0, 2.0, 1.0};
+        CHECK(equal_vectors(truss->essential_prescribed, correct_ep));
+        CHECK(equal_vectors_tol(truss->essential_boundary_conditions, correct_ebc, 1e-17));
+        CHECK(equal_vectors_tol(truss->natural_boundary_conditions, correct_nbc, 1e-17));
+
+        // check element length
+        CHECK(equal_scalars_tol(truss->calculate_length(0, 1), 10.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->calculate_length(0, 2), 10.0 * SQRT_2, 1e-15));
+        CHECK(equal_scalars_tol(truss->calculate_length(1, 2), 10.0, 1e-15));
+
+        // check element stiffness
+        truss->calculate_element_stiffness(0);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 10.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -10.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 10.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 0.0, 1e-15));
+
+        truss->calculate_element_stiffness(1);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 5.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -5.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 5.0, 1e-15));
+
+        truss->calculate_element_stiffness(2);
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 0), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 1), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 2), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(0, 3), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 1), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 2), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(1, 3), -10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 10.0, 1e-14));
+        CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 10.0, 1e-14));
+
+        // solve mechanical problem
+
+        // check solution
+        auto correct_u = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
+        auto correct_f = vector<double>{-2.0, -2.0, 0.0, 1.0, 2.0, 1.0};
+    }
+
     SUBCASE("eight-member truss") {
         // GEOMETRY
         //
@@ -172,70 +282,9 @@ TEST_CASE("truss2d") {
         CHECK(equal_scalars_tol(truss->kk_element->get(2, 2), 0.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(2, 3), 0.0, 1e-15));
         CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 2083.3333333333333, 1e-15));
-    }
 
-    SUBCASE("three-member truss") {
-        // GEOMETRY
-        //
-        //                      fy=1 ↑
-        // ---                       2 →
-        //  ↑                      ,'| fx=2
-        //  |                    ,'  |
-        //  |                  ,'    |
-        //  |       EA=200√2 ,'      |
-        // 10          (2) ,'        | EA=50
-        //  |            ,'          | (1)
-        //  |          ,'            |
-        //  |        ,'              |
-        //  |      ,'    EA=100      |
-        //  ↓    ,'       (0)        |
-        // ---  0--------------------1
-        //     | |                  | |
-        //      ⇊ uy=-0.5     uy=0.4 ⇈
-        //
-        //      |←------- 10 -------→|
-        //
-        // BOUNDARY CONDITIONS
-        //
-        // node 0: x-fixed with a vertical displacement: uy = -0.5
-        // node 1: x-fixed with a vertical displacement: uy = 0.4
-        // node 2: fx = 2.0 and fy = 1.0
-        //
-        // EXPECTED RESULTS
-        //
-        // kk * uu = ff
-        //
-        // correct_uu = {0.0, -0.5, 0.0, 0.4, -0.5, 0.2}
-        // correct_ff = {-2.0, -2.0, 0.0, 1.0, 2.0, 1.0}
-
-        // input data
-        auto coordinates = vector<double>{0.0, 0.0, 10.0, 0.0, 10.0, 10.0};
-        auto connectivity = vector<size_t>{0, 1, 1, 2, 2, 0};
-        auto properties = vector<double>{100.0, 50.0, 200.0 * SQRT_2};
-        map<node_dof_pair_t, double> essential_bcs{
-            {{0, AlongX}, 0.0},
-            {{0, AlongY}, -0.5},
-            {{1, AlongY}, 0.4}};
-        map<node_dof_pair_t, double> natural_bcs{
-            {{2, AlongX}, 2.0},
-            {{2, AlongY}, 1.0},
-        };
-
-        // allocate truss solver
-        auto truss = Truss2d::make_new(coordinates, connectivity, properties, essential_bcs, natural_bcs);
-
-        // check boundary condition arrays
-        auto correct_ep = vector<bool>{true, true, false, true, false, false};
-        auto correct_ebc = vector<double>{0.0, -0.5, 0.0, 0.4, 0.0, 0.0};
-        auto correct_nbc = vector<double>{0.0, 0.0, 0.0, 0.0, 2.0, 1.0};
-        CHECK(equal_vectors(truss->essential_prescribed, correct_ep));
-        CHECK(equal_vectors_tol(truss->essential_boundary_conditions, correct_ebc, 1e-17));
-        CHECK(equal_vectors_tol(truss->natural_boundary_conditions, correct_nbc, 1e-17));
-
-        // solve mechanical problem
-
-        // check solution
-        auto correct_u = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
-        auto correct_f = vector<double>{-2.0, -2.0, 0.0, 1.0, 2.0, 1.0};
+        // check global stiffness matrix
+        truss->calculate_global_stiffness();
+        // truss->kk_csr->print("global stiffness matrix");
     }
 }

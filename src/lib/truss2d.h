@@ -70,8 +70,11 @@ struct Truss2d {
     /// @brief Internal forces increments of an element (size = total_ndof)
     std::vector<double> delta_ff_int;
 
-    /// @brief Global stiffness matrix (nnz ~ 4 * 4 * number_of_elements)
-    std::unique_ptr<CooMatrix> kk;
+    /// @brief Global stiffness matrix in COO format (nnz = 10 * number_of_elements)
+    std::unique_ptr<CooMatrix> kk_coo;
+
+    /// @brief Global stiffness matrix in CSR format (nnz = 10 * number_of_elements)
+    std::unique_ptr<CsrMatrixMkl> kk_csr;
 
     /// @brief Allocates a new Truss2D structure
     /// @param coordinates x0 y0  x1 y1  ...  xnn ynn (size = 2 * number_of_nodes)
@@ -89,7 +92,12 @@ struct Truss2d {
         auto number_of_nodes = coordinates.size() / 2;
         auto number_of_elements = connectivity.size() / 2;
         auto total_ndof = 2 * number_of_nodes;
-        auto nnz_max = 16 * number_of_elements; // could be optimized by doing an assembly first
+
+        // The number 10 below corresponds to the number of values in the
+        // element stiffness matrix on the diagonal and above the diagonal (upper triangle)
+        // The actual number of non-zeros is less than 10 * number_of_elements, so
+        // this could be optimized by doing an assembly first
+        auto nnz_max = 10 * number_of_elements;
 
         auto essential_prescribed = std::vector<bool>(total_ndof, false);
         auto essential_boundary_conditions = std::vector<double>(total_ndof, 0.0);
@@ -108,8 +116,7 @@ struct Truss2d {
             natural_boundary_conditions[global_dof] = value;
         }
 
-        // StoredLayout layout = UPPER_TRIANGULAR;
-        StoredLayout layout = FULL_MATRIX;
+        StoredLayout layout = UPPER_TRIANGULAR;
 
         return std::unique_ptr<Truss2d>{new Truss2d{
             number_of_nodes,
@@ -121,15 +128,16 @@ struct Truss2d {
             essential_prescribed,
             essential_boundary_conditions,
             natural_boundary_conditions,
-            Matrix::make_new(4, 4),                           // kk_element
-            std::vector<double>(total_ndof),                  // uu
-            std::vector<double>(total_ndof),                  // ff
-            std::vector<double>(total_ndof),                  // ff_int
-            std::vector<double>(total_ndof),                  // residual
-            std::vector<double>(total_ndof),                  // delta_uu
-            std::vector<double>(total_ndof),                  // delta_ff
-            std::vector<double>(total_ndof),                  // delta_ff_int
-            CooMatrix::make_new(layout, total_ndof, nnz_max), // kk
+            Matrix::make_new(4, 4),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            CooMatrix::make_new(layout, total_ndof, nnz_max),
+            NULL,
         }};
     }
 
@@ -157,7 +165,7 @@ struct Truss2d {
     void calculate_element_stiffness(size_t e);
 
     /// @brief Calculates the global stiffness
-    void calculate_kk();
+    void calculate_global_stiffness(bool recalculate = false);
 
     /// @brief K matrix for prescribed displacements
     /// @param h is the step-size
