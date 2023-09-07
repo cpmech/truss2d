@@ -52,8 +52,8 @@ struct Truss2d {
     /// @brief Global displacements (size = total_ndof)
     std::vector<double> uu;
 
-    /// @brief Global forces (size = total_ndof)
-    std::vector<double> ff;
+    /// @brief Right-hand side vector = global forces, corrected for prescribed displacements (size = total_ndof)
+    std::vector<double> rhs;
 
     /// @brief Global stiffness matrix in COO format (nnz = 10 * number_of_elements)
     std::unique_ptr<CooMatrix> kk_coo;
@@ -153,11 +153,8 @@ struct Truss2d {
     void calculate_element_stiffness(size_t e);
 
     /// @brief Calculates the global stiffness
-    void calculate_global_stiffness();
+    void calculate_rhs_and_global_stiffness();
 
     /// @brief Solves the mechanical problem
     void solve();
-
-    /// @brief Calculates the internal forces
-    void calculate_internal_forces();
 };

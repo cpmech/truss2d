@@ -111,7 +111,7 @@ TEST_CASE("truss2d") {
             CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 10.0, 1e-14));
 
             // check global stiffness matrix
-            truss->calculate_global_stiffness();
+            truss->calculate_rhs_and_global_stiffness();
             auto kk = truss->kk_coo->as_matrix();
             // kk->print();
             CHECK(equal_scalars_tol(kk->get(0, 0), 20.0, 1e-14));
@@ -156,7 +156,7 @@ TEST_CASE("truss2d") {
             CHECK(equal_vectors_tol(truss->natural_boundary_conditions, correct_nbc, 1e-17));
 
             // check global stiffness matrix
-            truss->calculate_global_stiffness();
+            truss->calculate_rhs_and_global_stiffness();
             auto kk = truss->kk_coo->as_matrix();
             // kk->print();
             CHECK(equal_scalars_tol(kk->get(0, 0), 1.0, 1e-14));
@@ -181,14 +181,13 @@ TEST_CASE("truss2d") {
             CHECK(equal_scalars_tol(kk->get(4, 5), 10.0, 1e-14));
             CHECK(equal_scalars_tol(kk->get(5, 5), 15.0, 1e-14));
 
-            // solve mechanical problem
+            // solve the linear system
             truss->solve();
-            print_vector("uu", truss->uu);
-            print_vector("ff", truss->ff);
+            // print_vector("uu", truss->uu);
 
             // check solution
-            auto correct_u = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
-            auto correct_f = vector<double>{-2.0, -2.0, 0.0, 1.0, 2.0, 1.0};
+            auto correct_uu = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
+            CHECK(equal_vectors_tol(truss->uu, correct_uu, 1e-15));
         }
     }
 
@@ -362,7 +361,7 @@ TEST_CASE("truss2d") {
         CHECK(equal_scalars_tol(truss->kk_element->get(3, 3), 2083.3333333333333, 1e-15));
 
         // check global stiffness matrix
-        truss->calculate_global_stiffness();
+        truss->calculate_rhs_and_global_stiffness();
         auto kk = truss->kk_coo->as_matrix();
         // kk->print();
         CHECK(equal_scalars_tol(kk->get(2, 2), 3925.0, 1e-15));

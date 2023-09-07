@@ -37,7 +37,19 @@ void Truss2d::calculate_element_stiffness(size_t e) {
     kk_element->set(3, 3, p * s * s);
 }
 
-void Truss2d::calculate_global_stiffness() {
+void Truss2d::calculate_rhs_and_global_stiffness() {
+    // initialize uu and right-hand side vector
+    for (size_t i = 0; i < total_ndof; ++i) {
+        if (essential_prescribed[i]) {
+            uu[i] = essential_boundary_conditions[i];  // needed to correct RHS vector
+            rhs[i] = essential_boundary_conditions[i]; // because diagonal(K;prescribed) = 1
+        } else {
+            uu[i] = 0.0;                             // irrelevant, actually
+            rhs[i] = natural_boundary_conditions[i]; // external forces
+        }
+    }
+
+    // assemble stiffness and fix RHS vector
     kk_coo->pos = 0; // reset
     for (size_t e = 0; e < number_of_elements; ++e) {
         calculate_element_stiffness(e);
@@ -46,6 +58,18 @@ void Truss2d::calculate_global_stiffness() {
         size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map local => global
         for (size_t i = 0; i < 4; ++i) {
             if (!essential_prescribed[m[i]]) {
+                // correct RHS
+                for (size_t j = 0; j < 4; ++j) {
+                    if (essential_prescribed[m[j]]) {
+                        if (j >= i) {
+                            rhs[m[i]] -= kk_element->get(i, j) * uu[m[j]];
+                        } else {
+                            // must get (i,j) from upper triangle
+                            rhs[m[i]] -= kk_element->get(j, i) * uu[m[j]];
+                        }
+                    }
+                }
+                // assemble upper triangle into global stiffness
                 for (size_t j = i; j < 4; ++j) { // j = i => local upper triangle
                     if (!essential_prescribed[m[j]]) {
                         if (m[j] >= m[i]) {
@@ -59,11 +83,15 @@ void Truss2d::calculate_global_stiffness() {
             }
         }
     }
+
+    // put ones on the diagonal of the global stiffness matrix
     for (size_t i = 0; i < total_ndof; i++) {
         if (essential_prescribed[i]) {
             kk_coo->put(i, i, 1.0);
         }
     }
+
+    // convert COO to CSR
     if (kk_csr == NULL) {
         kk_csr = CsrMatrixMkl::from(kk_coo);
     } else {
@@ -73,72 +101,7 @@ void Truss2d::calculate_global_stiffness() {
 }
 
 void Truss2d::solve() {
-    for (size_t i = 0; i < total_ndof; ++i) {
-        if (essential_prescribed[i]) {
-            uu[i] = essential_boundary_conditions[i];
-        } else {
-            uu[i] = 0.0;
-        }
-    }
-
     lin_sys_solver->analyze(kk_csr);
     lin_sys_solver->factorize(kk_csr);
-    lin_sys_solver->solve(uu, ff); // uu = inv(kk) * ff
-    // double h = 1.0 / number_of_increments;
-    // for (size_t i = 0; i < number_of_increments; ++i) {
-    //     // assembly
-    //     calculate_kk();
-
-    //     // save a copy of K for later recovering dF (could save only K21 and K22)
-    //     for (size_t j = 0; j < total_ndof; ++j) {
-    //         for (size_t i = 0; i < total_ndof; ++i) {
-    //             // kk_copy(i, j) = kk(i, j);
-    //         }
-    //     }
-
-    //     // modify K for prescribed displacements
-    //     modify_kk(h);
-
-    //     // solve dU = inv(K)*dF
-    //     // INT info = 0;
-    //     // INT nrhs = 1;
-    //     // dgesv_(&_ndof, &nrhs, _K, &_ndof, _ipiv, _dU, &_ndof, &info);
-
-    //     // solve external forces increments for prescribed essential (displacement) dofs
-    //     for (size_t j = 0; j < total_ndof; ++j) {
-    //         if (essential_prescribed[j]) {
-    //             for (size_t m = 0; m < total_ndof; ++m) {
-    //                 // delta_ff[j] += kk_copy(j, m) * delta_uu(m);
-    //             }
-    //         }
-    //     }
-
-    //     // internal forces
-    //     calculate_delta_ff_int();
-
-    //     // update
-    //     for (size_t j = 0; j < total_ndof; ++j) {
-    //         uu[j] += delta_uu[j];
-    //         ff[j] += delta_ff[j];
-    //         ff_int[j] += delta_ff_int[j];
-    //         residual[j] = ff[j] - ff_int[j];
-    //     }
-    // }
-}
-
-void Truss2d::calculate_internal_forces() {
-    // for (size_t e = 0; e < number_of_elements; ++e) {
-    //     size_t i = connectivity[e * 2];
-    //     size_t j = connectivity[e * 2 + 1];
-    //     double d = calculate_length(i, j);
-    //     double c = (get_x(j) - get_x(i)) / d;
-    //     double s = (get_y(j) - get_y(i)) / d;
-    //     double p = (divide_property_by_length ? properties[e] / d : properties[e]);
-    //     double delta_length = c * delta_uu[j * 2] + s * delta_uu[j * 2 + 1] - (c * delta_uu[i * 2] + s * delta_uu[i * 2 + 1]);
-    //     double delta_axial_force = delta_length * p;
-    //     delta_ff_int[i * 2] += -c * delta_axial_force;
-    //     delta_ff_int[i * 2 + 1] += -s * delta_axial_force;
-    //     delta_ff_int[j * 2] += c * delta_axial_force;
-    //     delta_ff_int[j * 2 + 1] += s * delta_axial_force;
-    // }
+    lin_sys_solver->solve(uu, rhs); // uu = inv(kk) * ff
 }
