@@ -1,6 +1,8 @@
 {
-  "cmake.configureOnOpen": false,
   "cSpell.words": [
-    "SUBCASE"
+    "EelasticRod",
+    "SUBCASE",
+    "tlfem",
+    "Uout"
   ]
 }

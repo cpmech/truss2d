@@ -1,200 +1,129 @@
 #include "truss2d.h"
 
-// LAPACK
-extern "C" {
-// double-general-solver
-#ifdef _MSC_VER
-#include <mkl.h>
-#else
-void dgesv_(int *Np, int *NRHSp, double *A, int *LDAp, int *IPIVp, double *B, int *LDBp, int *INFOp);
-#endif
-}
-
-/*
-Truss2D::Truss2D(int NNodes, int NRods, double const *Nodes, int const *Connects, bool const *EssenPresc,
-                 double const *NaturalBC, double const *EssenBC, double const *Props, bool DividePbyL) {
-    // set input data
-    _nn = NNodes;
-    _nr = NRods;
-    _nodes = Nodes;
-    _con = Connects;
-    _props = Props;
-    _ep = EssenPresc;
-    _ebc = EssenBC;
-    _nbc = NaturalBC;
-    _PbyL = DividePbyL;
-
-    // allocate arrays
-    _ndof = 2 * _nn;
-    _U = new double[_ndof];
-    _F = new double[_ndof];
-    _Fint = new double[_ndof];
-    _Res = new double[_ndof];
-    _dU = new double[_ndof];
-    _dF = new double[_ndof];
-    _dFint = new double[_ndof];
-    _K = new double[_ndof * _ndof];
-    _Kcpy = new double[_ndof * _ndof];
-    _ipiv = new INT[_ndof];
-
-    // initialize arrays
-    Initialize();
-}
-*/
-
-void Truss2D::Initialize() {
-    for (int i = 0; i < _ndof; ++i) {
-        _U[i] = 0.0;
-        _F[i] = 0.0;
-        _Fint[i] = 0.0;
-        _Res[i] = 0.0;
+void Truss2d::calculate_element_stiffness(size_t e) {
+    if (e >= number_of_elements) {
+        throw "cannot calculate element stiffness because the element index is out-of-range";
     }
+    size_t a = connectivity[e * 2];
+    size_t b = connectivity[e * 2 + 1];
+    double l = calculate_length(a, b);
+    auto xa = coordinates[a * 2];
+    auto ya = coordinates[a * 2 + 1];
+    auto xb = coordinates[b * 2];
+    auto yb = coordinates[b * 2 + 1];
+    double c = (xb - xa) / l;
+    double s = (yb - ya) / l;
+    double p = properties[e] / l;
+
+    // computing upper triangle only
+    //      _                   _
+    //     |  c*c c*s -c*c -c*s  | 0
+    // E A |   .  s*s -c*s -s*s  | 1
+    // --- |   .   .   c*c  c*s  | 2
+    //  L  |_  .   .    .   s*s _| 3
+    //         0   1    2    3
+    kk_element->set(0, 0, p * c * c);
+    kk_element->set(0, 1, p * c * s);
+    kk_element->set(0, 2, -p * c * c);
+    kk_element->set(0, 3, -p * c * s);
+
+    kk_element->set(1, 1, p * s * s);
+    kk_element->set(1, 2, -p * c * s);
+    kk_element->set(1, 3, -p * s * s);
+
+    kk_element->set(2, 2, p * c * c);
+    kk_element->set(2, 3, p * c * s);
+
+    kk_element->set(3, 3, p * s * s);
 }
 
-void Truss2D::SetNRods(int NRods) { _nr = NRods; }
+void Truss2d::calculate_rhs_and_global_stiffness() {
+    // The linear system is partitioned into unknown (1) and
+    // prescribed (2) sub-matrices and sub-vectors
+    //
+    //  _             _
+    // |  [K11] [K12]  | / {u1} \   / {f1} \  << unknown displacements
+    // |               | |      | = |      |
+    // |_ [K21] [K22] _| \ {u2} /   \ {f2} /  << prescribed displacements
+    //       ^     ^
+    // unknown     prescribed
+    //
+    // Note that:
+    //
+    // [K11]{u1} = {f1} - [K12]{u2}
+    //
+    // We need to solve the modified system
+    //
+    //  _             _
+    // |  [K11]  [0]   | / {?1} \   / {f1} - [K12]{u2} \  << unknown displacements
+    // |               | |      | = |                  |
+    // |_  [0]   [1]  _| \ {?2} /   \       {u2}       /  << prescribed displacements
+    //
+    // {rhs1} = {f1} - [K12]{u2}
+    // {rhs2} = {u2}
 
-void Truss2D::SetCon(int const *Con) { _con = Con; }
-
-Truss2D::~Truss2D() {
-    delete[] _U;
-    delete[] _F;
-    delete[] _Fint;
-    delete[] _Res;
-    delete[] _dU;
-    delete[] _dF;
-    delete[] _dFint;
-    delete[] _K;
-    delete[] _Kcpy;
-    delete[] _ipiv;
-}
-
-void Truss2D::CalcKe(int e) {
-    int i = _con[e * 2];
-    int j = _con[e * 2 + 1];
-    double d = L(i, j);
-    double c = (X(j) - X(i)) / d;
-    double s = (Y(j) - Y(i)) / d;
-    double p = (_props == NULL ? 1.0 : (_PbyL ? _props[e] / d : _props[e]));
-    _Ke[0] = p * c * c;
-    _Ke[4] = p * c * s;
-    _Ke[8] = -p * c * c;
-    _Ke[12] = -p * c * s;
-    _Ke[1] = _Ke[4];
-    _Ke[5] = p * s * s;
-    _Ke[9] = _Ke[12];
-    _Ke[13] = -p * s * s;
-    _Ke[2] = _Ke[8];
-    _Ke[6] = _Ke[9];
-    _Ke[10] = _Ke[0];
-    _Ke[14] = _Ke[4];
-    _Ke[3] = _Ke[12];
-    _Ke[7] = _Ke[13];
-    _Ke[11] = _Ke[14];
-    _Ke[15] = _Ke[5];
-}
-
-void Truss2D::CalcK() {
-    for (int i = 0; i < _ndof * _ndof; ++i) {
-        _K[i] = 0.0;
-    }
-    for (int e = 0; e < _nr; ++e) {
-        CalcKe(e);
-        int l = _con[e * 2];                             // left node
-        int r = _con[e * 2 + 1];                         // right node
-        int m[4] = {l * 2, l * 2 + 1, r * 2, r * 2 + 1}; // map (local=>global)
-        for (int i = 0; i < 4; ++i)
-            for (int j = 0; j < 4; ++j)
-                _K[m[j] * _ndof + m[i]] += _Ke[j * 4 + i];
-    }
-}
-
-void Truss2D::ModifyK(double h) {
-    // Set dF and dU (workspace) vectors
-    for (int i = 0; i < _ndof; ++i) {
-        _dF[i] = 0.0;
-        _dU[i] = 0.0;
-        _dFint[i] = 0.0;
-    }
-    for (int i = 0; i < _ndof; ++i) {
-        if (_ep[i]) {
-            _dU[i] = (_ebc == NULL ? 0.0 : _ebc[i] * h);
+    // initialize uu and right-hand side vector
+    // also, put ones on the diagonal of the global stiffness matrix
+    kk_coo->pos = 0; // reset position
+    for (size_t i = 0; i < total_ndof; ++i) {
+        if (essential_prescribed[i]) {
+            uu[i] = essential_boundary_conditions[i];  // {u2}: needed to correct RHS vector later on
+            rhs[i] = essential_boundary_conditions[i]; // {rhs2}: because diagonal(K;prescribed) = 1
+            kk_coo->put(i, i, 1.0);                    // [K22]: set diagonal(K;prescribed) = 1
         } else {
-            _dF[i] = _dU[i] = _nbc[i] * h;
-            for (int j = 0; j < _ndof; ++j) {
-                if (_ep[j]) {
-                    _dU[i] -= (_ebc == NULL ? 0.0 : _K[j * _ndof + i] * _ebc[j] * h);
+            uu[i] = 0.0;                             // {?1}: irrelevant, actually
+            rhs[i] = natural_boundary_conditions[i]; // {rhs1} := {f1}, external forces
+        }
+    }
+
+    // fix RHS vector and assemble stiffness
+    for (size_t e = 0; e < number_of_elements; ++e) {
+        calculate_element_stiffness(e);
+        size_t a = connectivity[e * 2];
+        size_t b = connectivity[e * 2 + 1];
+        size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map local => global
+        for (size_t i = 0; i < 4; ++i) {
+            if (!essential_prescribed[m[i]]) {
+                // {rhs1} -= [K12]{u2}, correct RHS
+                for (size_t j = 0; j < 4; ++j) {
+                    if (essential_prescribed[m[j]]) {
+                        if (j >= i) {
+                            rhs[m[i]] -= kk_element->get(i, j) * uu[m[j]];
+                        } else {
+                            // must get (i,j) from upper triangle
+                            rhs[m[i]] -= kk_element->get(j, i) * uu[m[j]];
+                        }
+                    }
+                }
+                // [K11]: assemble upper triangle into global stiffness
+                for (size_t j = i; j < 4; ++j) { // j = i => local upper triangle
+                    if (!essential_prescribed[m[j]]) {
+                        if (m[j] >= m[i]) {
+                            kk_coo->put(m[i], m[j], kk_element->get(i, j));
+                        } else {
+                            // must go to the global upper triangle
+                            kk_coo->put(m[j], m[i], kk_element->get(i, j));
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Clear lines and columns of K for prescribed displacements => modified
-    // stiffness
-    for (int i = 0; i < _ndof; ++i) {
-        if (_ep[i]) {
-            for (int j = 0; j < _ndof; ++j) {
-                _K[j * _ndof + i] = 0.0;
-                _K[i * _ndof + j] = 0.0;
-            }
-            _K[i * _ndof + i] = 1.0;
-        }
+    // convert COO to CSR
+    if (kk_csr == NULL) {
+        kk_csr = CsrMatrixMkl::from(kk_coo);
+    } else {
+        kk_csr.reset();
+        kk_csr = CsrMatrixMkl::from(kk_coo);
     }
 }
 
-void Truss2D::CalcDFint() {
-    for (int e = 0; e < _nr; ++e) {
-        int i = _con[e * 2];
-        int j = _con[e * 2 + 1];
-        double d = L(i, j);
-        double c = (X(j) - X(i)) / d;
-        double s = (Y(j) - Y(i)) / d;
-        double p = (_props == NULL ? 1.0 : (_PbyL ? _props[e] / d : _props[e]));
-        double elong = c * _dU[j * 2] + s * _dU[j * 2 + 1] - (c * _dU[i * 2] + s * _dU[i * 2 + 1]); // elongation
-        double dfn = elong * p;                                                                     // normal force increment
-        _dFint[i * 2] += -c * dfn;
-        _dFint[i * 2 + 1] += -s * dfn;
-        _dFint[j * 2] += c * dfn;
-        _dFint[j * 2 + 1] += s * dfn; // global coordinates
+void Truss2d::solve() {
+    if (kk_csr == NULL) {
+        calculate_rhs_and_global_stiffness();
     }
-}
-
-void Truss2D::Solve(int nInc) {
-    double h = 1.0 / nInc;
-    for (int i = 0; i < nInc; ++i) {
-        // Assembly
-        CalcK();
-
-        // Save a copy of K for later recovering of dF (could save only K21 and K22)
-        for (int j = 0; j < _ndof * _ndof; ++j) {
-            _Kcpy[j] = _K[j];
-        }
-
-        // Modify K for prescribed displacements
-        ModifyK(h);
-
-        // Solve dU = inv(K)*dF
-        INT info = 0;
-        INT nrhs = 1;
-        dgesv_(&_ndof, &nrhs, _K, &_ndof, _ipiv, _dU, &_ndof, &info);
-
-        // Solve external forces increments for prescribed essential (displacement) dofs
-        for (int j = 0; j < _ndof; ++j) {
-            if (_ep[j]) {
-                for (int m = 0; m < _ndof; ++m) {
-                    _dF[j] += _Kcpy[m * _ndof + j] * _dU[m];
-                }
-            }
-        }
-
-        // Calc internal forces
-        CalcDFint();
-
-        // Update
-        for (int j = 0; j < _ndof; ++j) {
-            _U[j] += _dU[j];
-            _F[j] += _dF[j];
-            _Fint[j] += _dFint[j];
-            _Res[j] = _F[j] - _Fint[j];
-        }
-    }
+    lin_sys_solver->analyze(kk_csr);
+    lin_sys_solver->factorize(kk_csr);
+    lin_sys_solver->solve(uu, rhs); // uu = inv(kk) * ff
 }

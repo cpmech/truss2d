@@ -1,14 +1,10 @@
 # Simple 2D Finite Element Solver for Structural Trusses
 
-## Compiling by using CMake
-
 ```bash
 ./all.bash
 ```
 
-# Appendix
-
-## Formatting code with Visual Studio Code
+## Format code with Visual Studio Code
 
 Add the following line to settings.json
 

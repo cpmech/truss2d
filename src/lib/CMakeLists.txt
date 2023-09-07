@@ -5,5 +5,6 @@ set(TESTS
 foreach(var ${TESTS})
     add_executable(${var} "${var}.cpp")
     add_test(NAME ${var} COMMAND ${var})
-    target_link_libraries(${var} PUBLIC ${LIBS} ${LIB_NAME})
+    target_compile_definitions(${var} PUBLIC USE_MKL)
+    target_link_libraries(${var} PUBLIC MKL::MKL ${LACLIB_LIBS} truss2d)
 endforeach(var)

@@ -1,139 +1,160 @@
 #pragma once
 
-#ifdef _MSC_VER
-#include <mkl.h>
-#define INT MKL_INT
-#else
-#define INT int
-#endif // _MSC_VER
-
-#include <cmath> // for pow, sqrt, etc
+#include "laclib.h"
+#include <map>
 #include <memory>
+#include <tuple>
+#include <vector>
 
-// Implements a Finite Element solver for trusses in 2D
-//
-// Example of input:
-//                             1.0 ^
-//                                 |
-//                                 |3
-//                                 o----> 2.0
-//                               ,'|
-//                             ,'  |
-//                           ,'    |
-//                 EA/L=20 ,'      |
-//                   (3) ,'        | EA/L=5
-//                     ,'          | (2)
-//                   ,'            |
-//                 ,'              |
-//   y           ,'                |
-//   |        1,'        (1)       |2
-//   |        o--------------------o
-//   |____x   ^       EA/L=10      ^
-//           ###                   O
-//           ###                  ---
-//
-// const int nn = 3; // num nodes
-// const int nr = 3; // num rods
-// double nodes     [nn*2] = {0,0, 10,0, 10,10};
-// int    con       [nr*2] = {0,1, 1,2, 2,0};
-// double props     [nr  ] = {10,5,20};
-// bool   ep        [nn*2] = {true,true, false,true, false,false};
-// double ebc       [nn*2] = {0,-0.5, 0,0.4, 0,0};
-// double nbc       [nn*2] = {0,0, 0,0, 2,1};
-// double u_correct [nn*2] = {0,-0.5, 0,0.4, -0.5,0.2};
-// double f_correct [nn*2] = {-2,-2, 0,1, 2,1};
-//
-// Truss2D truss(nn,nr,nodes,con,ep,nbc,ebc,props);
-// truss.Solve();
-//
-// Notation:
-//   X,Y : coordinates
-//   R   : radii
-//   C   : list of connectivity (l:left node, r: right node)
-//   P   : properties
-//   ep  : is essential prescribed ?
-//   bc  : boundary conditions
-//   ebc : essential boundary conditions == displacements
-//   nbc : natural boundary conditions == forces
+using namespace std;
+
+/// @brief Defines the index of a local DOF (0 or 1)
+enum LocalDOF {
+    AlongX = 0,
+    AlongY = 1,
+};
+
+/// @brief Holds the pair (node_number, dof_number)
+typedef std::tuple<size_t, LocalDOF> node_dof_pair_t;
 
 /// @brief Implements a finite element solver for trusses in 2D
-struct Truss2D {
-    int _nn;              // Number of nodes
-    int _nr;              // Number of rods
-    double const *_nodes; // Coordinates x0 y0  x1 y1  ...  xnn ynn (size=2*nn)
-    int const *_con;      // Connectivity 0 1  0 2  1 2  (size=2*nr)
-    double const *_props; // Properties (size=nr)
-    bool const *_ep;      // Essential (displacement) prescribed?
-    double const *_ebc;   // Essential (displacement) boundary conditions
-    double const *_nbc;   // Natural (force) boundary conditions
-    bool _PbyL;           // Divide P (properties) by L (length) ?
-    double _Ke[16];       // Space to hold a stiffness matrix of an element. Set by Ke() method. (must be in col-major format for LAPACK)
-    INT _ndof;            // Number of degrees of freedom == 2*nn
-    double *_U;           // Global displacements (size=_ndof)
-    double *_F;           // Global forces (size=_ndof)
-    double *_Fint;        // Internal forces of an element (size=_ndof)
-    double *_Res;         // Residual = F - Fint (size=_ndof)
-    double *_dU;          // Global displacements increments (size=_ndof)
-    double *_dF;          // Global forces increments (size=_ndof)
-    double *_dFint;       // Internal forces increments of an element (size=_ndof)
-    double *_K;           // Global stiffness matrix. (must be in col-major forces for LAPACK). (size=_ndof*_ndof)
-    double *_Kcpy;        // Global stiffness matrix. (must be in col-major forces for LAPACK). (size=_ndof*_ndof)
-    INT *_ipiv;           // Index pivot for LAPACK (size=_ndof)
+struct Truss2d {
+    /// @brief Holds the number of nodes = coordinates.size() / 2
+    size_t number_of_nodes;
 
-    // Initialize clears U, F, Fint and Res (displacements, forces, internal // forces, and residuals).
-    void Initialize();
+    /// @brief Holds the number of elements = connectivity.size() / 2
+    size_t number_of_elements;
 
-    // SetNRods (re)set number of rods (elements) (NOTE: this will only work if // Props==NULL).
-    void SetNRods(int NRods);
+    /// @brief Holds the total number of DOFs = 2 * number_of_nodes
+    size_t total_ndof;
 
-    // SetCon (re)set connectivity (NOTE: this will only work if Props==NULL).
-    void SetCon(int const *Con);
+    /// @brief Coordinates x0 y0  x1 y1  ...  xnn ynn (size = 2 * number_of_nodes)
+    std::vector<double> coordinates;
 
-    // Destructor
-    ~Truss2D();
+    /// @brief Connectivity 0 1  0 2  1 2  (size = 2 * number_of_elements)
+    std::vector<size_t> connectivity;
 
-    // X returns the abscissa of node i
-    double X(int i) const { return _nodes[i * 2]; }
+    /// @brief Properties = E*A (size = number_of_elements)
+    std::vector<double> properties;
 
-    // Y returns the ordinate of node i
-    double Y(int i) const { return _nodes[i * 2 + 1]; }
+    /// @brief Essential (displacement) prescribed? (size = total_ndof)
+    std::vector<bool> essential_prescribed;
 
-    // L returns the distance between node i and j
-    double L(int i, int j) const { return sqrt(pow(X(i) - X(j), 2.0) + pow(Y(i) - Y(j), 2.0)); }
+    /// @brief Essential (displacement) boundary conditions (size = total_ndof)
+    std::vector<double> essential_boundary_conditions;
 
-    // Ndof returns the number of degrees of freedom
-    int Ndof() const { return _ndof; }
+    /// @brief Natural (force) boundary conditions (size = total_ndof)
+    std::vector<double> natural_boundary_conditions;
 
-    // CalcKe calculate the element stiffness (Ke).
-    //   Input:
-    //     e -- index of an element
-    void CalcKe(int e);
+    /// @brief Element stiffness matrix (4 x 4)
+    std::unique_ptr<Matrix> kk_element;
 
-    // CalcK calculates the global stiffness (K).
-    void CalcK();
+    /// @brief Global displacements (size = total_ndof)
+    std::vector<double> uu;
 
-    // ModifyK modifies K matrix for prescribed displacements.
-    //   Input:
-    //     h -- step-size
-    void ModifyK(double h = 1);
+    /// @brief Right-hand side vector = global forces, corrected for prescribed displacements (size = total_ndof)
+    std::vector<double> rhs;
 
-    // CalcDFint calculates internal forces.
-    void CalcDFint();
+    /// @brief Global stiffness matrix in COO format (nnz = 10 * number_of_elements)
+    std::unique_ptr<CooMatrix> kk_coo;
 
-    // Solve solves equilibrium via FEM.
-    //   Input:
-    //     nInc -- number of increments
-    void Solve(int nInc = 1);
+    /// @brief Global stiffness matrix in CSR format (nnz = 10 * number_of_elements)
+    std::unique_ptr<CsrMatrixMkl> kk_csr;
 
-    // U returns the displacements
-    double const *U() const { return _U; }
+    /// @brief Holds the linear system solver
+    std::unique_ptr<SolverDss> lin_sys_solver;
 
-    // F returns the external forces
-    double const *F() const { return _F; }
+    /// @brief Allocates a new Truss2D structure
+    /// @param coordinates x0 y0  x1 y1  ...  xnn ynn (size = 2 * number_of_nodes)
+    /// @param connectivity 0 1  0 2  1 2  (size = 2 * number_of_elements)
+    /// @param properties E*A (size = number_of_elements)
+    /// @param essential_bcs prescribed boundary conditions. maps (node_number,dof_number) => value
+    /// @param natural_bcs natural boundary conditions. maps (node_number,dof_number) => value
+    inline static std::unique_ptr<Truss2d> make_new(
+        const std::vector<double> &coordinates,
+        const std::vector<size_t> &connectivity,
+        const std::vector<double> &properties,
+        const std::map<node_dof_pair_t, double> &essential_bcs,
+        const std::map<node_dof_pair_t, double> &natural_bcs) {
 
-    // Fint returns the internal forces
-    double const *Fint() const { return _Fint; }
+        auto number_of_nodes = coordinates.size() / 2;
+        auto number_of_elements = connectivity.size() / 2;
+        auto total_ndof = 2 * number_of_nodes;
 
-    // Res returns the residual
-    double const *Res() const { return _Res; }
+        // The number 10 below corresponds to the number of values in the
+        // element stiffness matrix on the diagonal and above the diagonal (upper triangle)
+        // The actual number of non-zeros is less than 10 * number_of_elements, so
+        // this could be optimized by doing an assembly first
+        auto nnz_max = 10 * number_of_elements;
+
+        auto essential_prescribed = std::vector<bool>(total_ndof, false);
+        auto essential_boundary_conditions = std::vector<double>(total_ndof, 0.0);
+        auto natural_boundary_conditions = std::vector<double>(total_ndof, 0.0);
+
+        for (const auto &[key, value] : essential_bcs) {
+            const auto [node, dof] = key;
+            auto global_dof = node * 2 + dof;
+            essential_prescribed[global_dof] = true;
+            essential_boundary_conditions[global_dof] = value;
+        }
+
+        for (const auto &[key, value] : natural_bcs) {
+            const auto [node, dof] = key;
+            auto global_dof = node * 2 + dof;
+            natural_boundary_conditions[global_dof] = value;
+        }
+
+        StoredLayout layout = UPPER_TRIANGULAR;
+
+        auto options = DssOptions::make_new();
+        options->symmetric = true;
+        options->positive_definite = true;
+
+        return std::unique_ptr<Truss2d>{new Truss2d{
+            number_of_nodes,
+            number_of_elements,
+            total_ndof,
+            coordinates,
+            connectivity,
+            properties,
+            essential_prescribed,
+            essential_boundary_conditions,
+            natural_boundary_conditions,
+            Matrix::make_new(4, 4),
+            std::vector<double>(total_ndof),
+            std::vector<double>(total_ndof),
+            CooMatrix::make_new(layout, total_ndof, nnz_max),
+            NULL,
+            SolverDss::make_new(options),
+        }};
+    }
+
+    /// @brief Returns the distance between node a and b
+    /// @param a index of node in 0 <= a < number_of_nodes
+    /// @param b index of node in 0 <= b < number_of_nodes
+    inline double calculate_length(size_t a, size_t b) const {
+        if (a >= coordinates.size()) {
+            throw "cannot calculate the length because the a-th node index is out-of-range";
+        }
+        if (b >= coordinates.size()) {
+            throw "cannot calculate the length because the b-th node index is out-of-range";
+        }
+        auto xa = coordinates[a * 2];
+        auto ya = coordinates[a * 2 + 1];
+        auto xb = coordinates[b * 2];
+        auto yb = coordinates[b * 2 + 1];
+        auto dx = xb - xa;
+        auto dy = yb - ya;
+        return sqrt(dx * dx + dy * dy);
+    }
+
+    /// @brief Calculates the element stiffness
+    /// @param e index of element (rod) in 0 <= e < number_of_elements
+    void calculate_element_stiffness(size_t e);
+
+    /// @brief Calculates the global stiffness
+    void calculate_rhs_and_global_stiffness();
+
+    /// @brief Solves the mechanical problem
+    void solve();
 };
