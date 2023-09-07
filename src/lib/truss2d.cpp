@@ -120,6 +120,9 @@ void Truss2d::calculate_rhs_and_global_stiffness() {
 }
 
 void Truss2d::solve() {
+    if (kk_csr == NULL) {
+        calculate_rhs_and_global_stiffness();
+    }
     lin_sys_solver->analyze(kk_csr);
     lin_sys_solver->factorize(kk_csr);
     lin_sys_solver->solve(uu, rhs); // uu = inv(kk) * ff

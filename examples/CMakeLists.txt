@@ -1,5 +1,5 @@
 set(EXAMPLES
-    ex_three_member_truss
+    bhatti_example_1dot4
 )
 
 foreach(var ${EXAMPLES})
