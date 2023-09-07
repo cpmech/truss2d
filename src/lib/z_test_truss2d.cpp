@@ -183,8 +183,8 @@ TEST_CASE("truss2d") {
 
             // solve the linear system
             truss->solve();
-            print_vector("uu", truss->uu);
-            print_vector("rhs", truss->rhs);
+            // print_vector("uu", truss->uu);
+            // print_vector("rhs", truss->rhs);
 
             // check solution
             auto correct_uu = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
@@ -225,8 +225,7 @@ TEST_CASE("truss2d") {
         //
         // kk * uu = ff
         //
-        // correct_uu = TODO
-        // correct_ff = TODO
+        // correct_uu = {0.0, 0.0, 0.0146067, -0.1046405, 0.0027214, -0.0730729, 0.0, 0.0, 0.0055080, -0.0164325}
         //
         // REFERENCE
         // CEE 421L. Matrix Structural Analysis – Duke University – Fall 2014 – H.P. Gavin
@@ -388,5 +387,13 @@ TEST_CASE("truss2d") {
         CHECK(equal_scalars_tol(kk->get(8, 8), 2362.50, 1e-15));
         CHECK(equal_scalars_tol(kk->get(8, 9), 600.0, 1e-15));
         CHECK(equal_scalars_tol(kk->get(9, 9), 2533.3333333333333, 1e-15));
+
+        // solve the linear system
+        truss->solve();
+        print_vector("uu", truss->uu);
+
+        // check solution
+        auto correct_uu = vector<double>{0.0, 0.0, 0.0146067, -0.1046405, 0.0027214, -0.0730729, 0.0, 0.0, 0.0055080, -0.0164325};
+        CHECK(equal_vectors_tol(truss->uu, correct_uu, 1e-7));
     }
 }
