@@ -184,10 +184,13 @@ TEST_CASE("truss2d") {
             // solve the linear system
             truss->solve();
             print_vector("uu", truss->uu);
+            print_vector("rhs", truss->rhs);
 
             // check solution
             auto correct_uu = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
+            auto correct_rhs = vector<double>{0.0, -0.5, 0.0, 0.4, -3.0, -2.0}; // Felippa I-FEM page 3-13
             CHECK(equal_vectors_tol(truss->uu, correct_uu, 1e-15));
+            CHECK(equal_vectors_tol(truss->rhs, correct_rhs, 1e-15));
         }
     }
 
