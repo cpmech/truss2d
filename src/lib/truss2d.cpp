@@ -38,21 +38,45 @@ void Truss2d::calculate_element_stiffness(size_t e) {
 }
 
 void Truss2d::calculate_rhs_and_global_stiffness() {
+    // The linear system is partitioned into unknown (1) and
+    // prescribed (2) sub-matrices and sub-vectors
+    //
+    //  _             _
+    // |  [K11] [K12]  | / {u1} \   / {f1} \  << unknown displacements
+    // |               | |      | = |      |
+    // |_ [K21] [K22] _| \ {u2} /   \ {f2} /  << prescribed displacements
+    //       ^     ^
+    // unknown     prescribed
+    //
+    // Note that:
+    //
+    // [K11]{u1} = {f1} - [K12]{u2}
+    //
+    // We need to solve the modified system
+    //
+    //  _             _
+    // |  [K11]  [0]   | / {?1} \   / {f1} - [K12]{u2} \  << unknown displacements
+    // |               | |      | = |                  |
+    // |_  [0]   [1]  _| \ {?2} /   \       {u2}       /  << prescribed displacements
+    //
+    // {rhs1} = {f1} - [K12]{u2}
+    // {rhs2} = {u2}
+
     // initialize uu and right-hand side vector
     // also, put ones on the diagonal of the global stiffness matrix
     kk_coo->pos = 0; // reset position
     for (size_t i = 0; i < total_ndof; ++i) {
         if (essential_prescribed[i]) {
-            uu[i] = essential_boundary_conditions[i];  // needed to correct RHS vector
-            rhs[i] = essential_boundary_conditions[i]; // because diagonal(K;prescribed) = 1
-            kk_coo->put(i, i, 1.0);                    // set diagonal(K;prescribed) = 1
+            uu[i] = essential_boundary_conditions[i];  // {u2}: needed to correct RHS vector later on
+            rhs[i] = essential_boundary_conditions[i]; // {rhs2}: because diagonal(K;prescribed) = 1
+            kk_coo->put(i, i, 1.0);                    // [K22]: set diagonal(K;prescribed) = 1
         } else {
-            uu[i] = 0.0;                             // irrelevant, actually
-            rhs[i] = natural_boundary_conditions[i]; // external forces
+            uu[i] = 0.0;                             // {?1}: irrelevant, actually
+            rhs[i] = natural_boundary_conditions[i]; // {rhs1} := {f1}, external forces
         }
     }
 
-    // assemble stiffness and fix RHS vector
+    // fix RHS vector and assemble stiffness
     for (size_t e = 0; e < number_of_elements; ++e) {
         calculate_element_stiffness(e);
         size_t a = connectivity[e * 2];
@@ -60,7 +84,7 @@ void Truss2d::calculate_rhs_and_global_stiffness() {
         size_t m[4] = {a * 2, a * 2 + 1, b * 2, b * 2 + 1}; // map local => global
         for (size_t i = 0; i < 4; ++i) {
             if (!essential_prescribed[m[i]]) {
-                // correct RHS
+                // {rhs1} -= [K12]{u2}, correct RHS
                 for (size_t j = 0; j < 4; ++j) {
                     if (essential_prescribed[m[j]]) {
                         if (j >= i) {
@@ -71,7 +95,7 @@ void Truss2d::calculate_rhs_and_global_stiffness() {
                         }
                     }
                 }
-                // assemble upper triangle into global stiffness
+                // [K11]: assemble upper triangle into global stiffness
                 for (size_t j = i; j < 4; ++j) { // j = i => local upper triangle
                     if (!essential_prescribed[m[j]]) {
                         if (m[j] >= m[i]) {
