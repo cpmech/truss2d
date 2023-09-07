@@ -37,7 +37,7 @@ void Truss2d::calculate_element_stiffness(size_t e) {
     kk_element->set(3, 3, p * s * s);
 }
 
-void Truss2d::calculate_global_stiffness(bool recalculate) {
+void Truss2d::calculate_global_stiffness() {
     kk_coo->pos = 0; // reset
     for (size_t e = 0; e < number_of_elements; ++e) {
         calculate_element_stiffness(e);
@@ -67,63 +67,23 @@ void Truss2d::calculate_global_stiffness(bool recalculate) {
     if (kk_csr == NULL) {
         kk_csr = CsrMatrixMkl::from(kk_coo);
     } else {
-        if (recalculate) {
-            kk_csr.reset();
-            kk_csr = CsrMatrixMkl::from(kk_coo);
-        }
+        kk_csr.reset();
+        kk_csr = CsrMatrixMkl::from(kk_coo);
     }
 }
 
-void Truss2d::modify_kk(double h) {
-    // // set prescribed values
-    // for (size_t i = 0; i < total_ndof; ++i) {
-    //     delta_ff[i] = 0.0;
-    //     delta_uu[i] = 0.0;
-    //     delta_ff_int[i] = 0.0;
-    //     if (essential_prescribed[i]) {
-    //         delta_uu[i] = essential_boundary_conditions[i] * h;
-    //     } else {
-    //         delta_ff[i] = natural_boundary_conditions[i] * h;
-    //         delta_uu[i] = delta_ff[i];
-    //         for (size_t j = 0; j < total_ndof; ++j) {
-    //             if (essential_prescribed[j]) {
-    //                 // TODO
-    //                 // delta_uu[i] -= kk(i, j) * essential_boundary_conditions[j] * h;
-    //             }
-    //         }
-    //     }
-    // }
+void Truss2d::solve() {
+    for (size_t i = 0; i < total_ndof; ++i) {
+        if (essential_prescribed[i]) {
+            uu[i] = essential_boundary_conditions[i];
+        } else {
+            uu[i] = 0.0;
+        }
+    }
 
-    // // clear lines and columns of K for prescribed displacements => modified stiffness
-    // for (size_t i = 0; i < total_ndof; ++i) {
-    //     if (essential_prescribed[i]) {
-    //         for (size_t j = 0; j < total_ndof; ++j) {
-    //             // kk(i, j) = 0.0;
-    //             // kk(j, i) = 0.0;
-    //         }
-    //         // kk(i, i) = 1.0;
-    //     }
-    // }
-}
-
-void Truss2d::calculate_delta_ff_int() {
-    // for (size_t e = 0; e < number_of_elements; ++e) {
-    //     size_t i = connectivity[e * 2];
-    //     size_t j = connectivity[e * 2 + 1];
-    //     double d = calculate_length(i, j);
-    //     double c = (get_x(j) - get_x(i)) / d;
-    //     double s = (get_y(j) - get_y(i)) / d;
-    //     double p = (divide_property_by_length ? properties[e] / d : properties[e]);
-    //     double delta_length = c * delta_uu[j * 2] + s * delta_uu[j * 2 + 1] - (c * delta_uu[i * 2] + s * delta_uu[i * 2 + 1]);
-    //     double delta_axial_force = delta_length * p;
-    //     delta_ff_int[i * 2] += -c * delta_axial_force;
-    //     delta_ff_int[i * 2 + 1] += -s * delta_axial_force;
-    //     delta_ff_int[j * 2] += c * delta_axial_force;
-    //     delta_ff_int[j * 2 + 1] += s * delta_axial_force;
-    // }
-}
-
-void Truss2d::solve(size_t number_of_increments) {
+    lin_sys_solver->analyze(kk_csr);
+    lin_sys_solver->factorize(kk_csr);
+    lin_sys_solver->solve(uu, ff); // uu = inv(kk) * ff
     // double h = 1.0 / number_of_increments;
     // for (size_t i = 0; i < number_of_increments; ++i) {
     //     // assembly
@@ -163,5 +123,22 @@ void Truss2d::solve(size_t number_of_increments) {
     //         ff_int[j] += delta_ff_int[j];
     //         residual[j] = ff[j] - ff_int[j];
     //     }
+    // }
+}
+
+void Truss2d::calculate_internal_forces() {
+    // for (size_t e = 0; e < number_of_elements; ++e) {
+    //     size_t i = connectivity[e * 2];
+    //     size_t j = connectivity[e * 2 + 1];
+    //     double d = calculate_length(i, j);
+    //     double c = (get_x(j) - get_x(i)) / d;
+    //     double s = (get_y(j) - get_y(i)) / d;
+    //     double p = (divide_property_by_length ? properties[e] / d : properties[e]);
+    //     double delta_length = c * delta_uu[j * 2] + s * delta_uu[j * 2 + 1] - (c * delta_uu[i * 2] + s * delta_uu[i * 2 + 1]);
+    //     double delta_axial_force = delta_length * p;
+    //     delta_ff_int[i * 2] += -c * delta_axial_force;
+    //     delta_ff_int[i * 2 + 1] += -s * delta_axial_force;
+    //     delta_ff_int[j * 2] += c * delta_axial_force;
+    //     delta_ff_int[j * 2 + 1] += s * delta_axial_force;
     // }
 }

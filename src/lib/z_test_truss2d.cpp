@@ -182,6 +182,9 @@ TEST_CASE("truss2d") {
             CHECK(equal_scalars_tol(kk->get(5, 5), 15.0, 1e-14));
 
             // solve mechanical problem
+            truss->solve();
+            print_vector("uu", truss->uu);
+            print_vector("ff", truss->ff);
 
             // check solution
             auto correct_u = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};

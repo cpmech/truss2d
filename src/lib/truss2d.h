@@ -55,26 +55,14 @@ struct Truss2d {
     /// @brief Global forces (size = total_ndof)
     std::vector<double> ff;
 
-    /// @brief Internal forces of an element (size = total_ndof)
-    std::vector<double> ff_int;
-
-    /// @brief Residual = F - F_int (size = total_ndof)
-    std::vector<double> residual;
-
-    /// @brief Global displacements increments (size = total_ndof)
-    std::vector<double> delta_uu;
-
-    /// @brief Global forces increments (size = total_ndof)
-    std::vector<double> delta_ff;
-
-    /// @brief Internal forces increments of an element (size = total_ndof)
-    std::vector<double> delta_ff_int;
-
     /// @brief Global stiffness matrix in COO format (nnz = 10 * number_of_elements)
     std::unique_ptr<CooMatrix> kk_coo;
 
     /// @brief Global stiffness matrix in CSR format (nnz = 10 * number_of_elements)
     std::unique_ptr<CsrMatrixMkl> kk_csr;
+
+    /// @brief Holds the linear system solver
+    std::unique_ptr<SolverDss> lin_sys_solver;
 
     /// @brief Allocates a new Truss2D structure
     /// @param coordinates x0 y0  x1 y1  ...  xnn ynn (size = 2 * number_of_nodes)
@@ -118,6 +106,10 @@ struct Truss2d {
 
         StoredLayout layout = UPPER_TRIANGULAR;
 
+        auto options = DssOptions::make_new();
+        options->symmetric = true;
+        options->positive_definite = true;
+
         return std::unique_ptr<Truss2d>{new Truss2d{
             number_of_nodes,
             number_of_elements,
@@ -131,13 +123,9 @@ struct Truss2d {
             Matrix::make_new(4, 4),
             std::vector<double>(total_ndof),
             std::vector<double>(total_ndof),
-            std::vector<double>(total_ndof),
-            std::vector<double>(total_ndof),
-            std::vector<double>(total_ndof),
-            std::vector<double>(total_ndof),
-            std::vector<double>(total_ndof),
             CooMatrix::make_new(layout, total_ndof, nnz_max),
             NULL,
+            SolverDss::make_new(options),
         }};
     }
 
@@ -165,16 +153,11 @@ struct Truss2d {
     void calculate_element_stiffness(size_t e);
 
     /// @brief Calculates the global stiffness
-    void calculate_global_stiffness(bool recalculate = false);
+    void calculate_global_stiffness();
 
-    /// @brief K matrix for prescribed displacements
-    /// @param h is the step-size
-    void modify_kk(double h = 1);
+    /// @brief Solves the mechanical problem
+    void solve();
 
-    /// @brief CalcDFint calculates internal forces.
-    void calculate_delta_ff_int();
-
-    /// @brief Solve solves equilibrium via FEM.
-    /// @param number_of_increments number of increments
-    void solve(size_t number_of_increments = 1);
+    /// @brief Calculates the internal forces
+    void calculate_internal_forces();
 };
