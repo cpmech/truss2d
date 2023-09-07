@@ -39,10 +39,13 @@ void Truss2d::calculate_element_stiffness(size_t e) {
 
 void Truss2d::calculate_rhs_and_global_stiffness() {
     // initialize uu and right-hand side vector
+    // also, put ones on the diagonal of the global stiffness matrix
+    kk_coo->pos = 0; // reset position
     for (size_t i = 0; i < total_ndof; ++i) {
         if (essential_prescribed[i]) {
             uu[i] = essential_boundary_conditions[i];  // needed to correct RHS vector
             rhs[i] = essential_boundary_conditions[i]; // because diagonal(K;prescribed) = 1
+            kk_coo->put(i, i, 1.0);                    // set diagonal(K;prescribed) = 1
         } else {
             uu[i] = 0.0;                             // irrelevant, actually
             rhs[i] = natural_boundary_conditions[i]; // external forces
@@ -50,7 +53,6 @@ void Truss2d::calculate_rhs_and_global_stiffness() {
     }
 
     // assemble stiffness and fix RHS vector
-    kk_coo->pos = 0; // reset
     for (size_t e = 0; e < number_of_elements; ++e) {
         calculate_element_stiffness(e);
         size_t a = connectivity[e * 2];
@@ -81,13 +83,6 @@ void Truss2d::calculate_rhs_and_global_stiffness() {
                     }
                 }
             }
-        }
-    }
-
-    // put ones on the diagonal of the global stiffness matrix
-    for (size_t i = 0; i < total_ndof; i++) {
-        if (essential_prescribed[i]) {
-            kk_coo->put(i, i, 1.0);
         }
     }
 

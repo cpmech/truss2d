@@ -183,7 +183,7 @@ TEST_CASE("truss2d") {
 
             // solve the linear system
             truss->solve();
-            // print_vector("uu", truss->uu);
+            print_vector("uu", truss->uu);
 
             // check solution
             auto correct_uu = vector<double>{0.0, -0.5, 0.0, 0.4, -0.5, 0.2};
